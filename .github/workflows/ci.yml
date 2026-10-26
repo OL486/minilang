@@ -1,0 +1,92 @@
+name: ci
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # 格式 / 静态检查 / 测试，只在一个平台上跑，快。
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: gofmt
+        run: |
+          out=$(gofmt -l ./cmd ./internal ./test ./tools)
+          if [ -n "$out" ]; then
+            echo "以下文件未格式化："
+            echo "$out"
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go test
+        run: go test ./... -count=1 -v
+
+  # 真正证明「能跑」的一步：编译出二进制，拿它跑示例，并校验两个引擎输出一致。
+  # 只看 go test 是不够的 —— 测试直接调库，绕过 CLI 的参数解析和退出码。
+  smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: build
+        run: go build -trimpath -ldflags "-s -w" -o minilang ./cmd/minilang
+
+      - name: version
+        run: ./minilang version
+
+      - name: run all examples (vm)
+        shell: bash
+        run: |
+          for f in examples/*.ml; do
+            echo "== $f"
+            ./minilang run "$f" > /dev/null
+          done
+
+      - name: cross-engine consistency
+        shell: bash
+        run: |
+          fail=0
+          for f in examples/*.ml; do
+            if diff -q <(./minilang run "$f") <(./minilang run "$f" --engine=tree) > /dev/null; then
+              echo "OK   $f"
+            else
+              echo "FAIL $f"
+              fail=1
+            fi
+          done
+          exit $fail
+
+      - name: error messages exit non-zero
+        shell: bash
+        run: |
+          for f in examples/errors/*.ml; do
+            if ./minilang run "$f" > /dev/null 2>&1; then
+              echo "FAIL $f 应当以非零码退出"
+              exit 1
+            fi
+            echo "OK   $f"
+          done

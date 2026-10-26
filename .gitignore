@@ -1,0 +1,12 @@
+# 构建产物（发布包走 GitHub Releases，不进版本库）
+/dist/
+/minilang
+/minilang.exe
+
+# Go
+*.test
+*.out
+
+# 编辑器
+.idea/
+.vscode/

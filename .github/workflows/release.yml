@@ -1,0 +1,45 @@
+name: release
+
+# 打 tag 即发布：v0.1.0 -> 5 个平台的压缩包 + checksums.txt 挂到 Release 上。
+# 打包逻辑和本地 `make release` 完全一样（tools/pack），
+# 避免「本地出的包和 CI 出的包不一致」这种最难查的问题。
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: build packages
+        run: go run tools/pack/main.go
+
+      - name: show artifacts
+        run: ls -lh dist/
+
+      - name: verify checksums
+        working-directory: dist
+        run: sha256sum -c checksums.txt
+
+      - name: publish
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.zip
+            dist/*.tar.gz
+            dist/checksums.txt
+          generate_release_notes: true
+          fail_on_unmatched_files: true
