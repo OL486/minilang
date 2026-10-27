@@ -84,6 +84,14 @@ make examples   # 跑全部示例，并校验两个引擎输出逐字节一致
 make release    # 交叉编译 6 个平台 -> dist/*.zip|tar.gz + checksums.txt
 ```
 
+**Windows 默认没有 `make`**（Git Bash 也不带），用等价命令：
+
+```bash
+go vet ./... && go test ./... -count=1
+go build -trimpath -ldflags "-s -w" -o minilang.exe ./cmd/minilang
+go run tools/pack/main.go
+```
+
 `make release` 调用 `tools/pack/main.go`（纯 Go 实现，不依赖 zip / tar / sha256sum 这些在 Windows 上不齐的命令），
 与 `.github/workflows/release.yml` 在打 tag 时执行的是**同一份打包逻辑**，
 所以本地出的包和 Release 上的包内容一致。
@@ -140,7 +148,7 @@ REPL 命令：`:help` `:quit` `:gc` `:stats`
 | S7 | VM 执行循环 + 跳转 + 局部变量 | `internal/engine/vm.go` | while 循环结果与 S3 一致 |
 | S8 | VM 里的函数 / 帧 / upvalue | `internal/engine/vm.go` `object.go` | `makeCounter` 在 VM 上一致 |
 | S9 | 标记-清除 GC | `internal/engine/gc.go` | `examples/05-gc-stress.ml --stats` |
-| S10 | 收尾对比 | [`docs/03-benchmark.md`](docs/03-benchmark.md) | 8.7× 加速 |
+| S10 | 收尾对比 | [`docs/03-benchmark.md`](docs/03-benchmark.md) | 约 8× 加速 |
 
 ---
 
@@ -173,7 +181,7 @@ done
 | 指标 | tree-walking | 字节码 VM |
 |---|---|---|
 | `fib(30)` 中位数 | 1402 ms | **161 ms** |
-| 加速比 | — | **8.7×**（多次测量 8.4–8.7） |
+| 加速比 | — | **8.7×**（多次测量 7.8–8.7，随机器负载波动） |
 | 40 万对象压力测试后存活 | — | **288**（关闭 GC 时 403,015） |
 
 完整数据和测量口径见 [`docs/03-benchmark.md`](docs/03-benchmark.md)。
