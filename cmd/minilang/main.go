@@ -429,9 +429,9 @@ func runBench(o options) {
 		}
 	} else {
 		vm := engine.NewVM(io.Discard)
-		// --gc-off 在 bench 里同样要生效。原先只有 run/repl 的 session 读了这个开关，
-		// bench 直接 NewVM 之后不关 GC，于是 `bench --gc-off` 被静默忽略 ——
-		// 参数被接受、输出看起来正常，但对照实验其实没做。
+		// --gc-off 在 bench 里同样要生效。原先只有 run/repl 的 session 读这个开关，
+		// bench 直接 NewVM 之后不关 GC，`bench --gc-off` 就被静默忽略：
+		// 参数被接受、输出正常，但对照实验实际没有生效。
 		if o.gcOff {
 			vm.SetGCEnabled(false)
 		}
