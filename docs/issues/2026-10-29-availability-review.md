@@ -129,9 +129,13 @@ go run ./cmd/minilang run examples/05-gc-stress.ml --stats --gc-off
 
 Windows 上没有 `make` 时，`Makefile` 里各目标的等价命令就是上面这些。
 
-本次审查实测结果：`go test ./...` 全绿（含新增 `cmd/minilang` 包）、
-`gofmt -l` 无输出、5 个示例双引擎一致、`bench` 中位数 181–192 ms、
-LOC 统计 4327 行（非空非注释 3733 行）。
+本次审查实测结果：
+
+- `go test ./...` 全绿（含新增 `cmd/minilang` 包），`gofmt -l` 无输出
+- 5 个示例在两个引擎上输出逐字节一致
+- `bench` 中位数 181–192 ms，LOC 统计 4327 行（非空非注释 3733 行）
+- `bench --gc-off` 可正常执行
+- CI（`ci.yml`）在 **ubuntu / windows / macos 三个平台全绿**：`check` + 三个 `smoke` job 全部 success
 
 ---
 
