@@ -429,6 +429,12 @@ func runBench(o options) {
 		}
 	} else {
 		vm := engine.NewVM(io.Discard)
+		// --gc-off 在 bench 里同样要生效。原先只有 run/repl 的 session 读了这个开关，
+		// bench 直接 NewVM 之后不关 GC，于是 `bench --gc-off` 被静默忽略 ——
+		// 参数被接受、输出看起来正常，但对照实验其实没做。
+		if o.gcOff {
+			vm.SetGCEnabled(false)
+		}
 		fn, compErrs := compiler.CompileProgram(vm, stmts)
 		if len(compErrs) > 0 {
 			fmt.Fprintln(o.errOut, diag.RenderAll(src, compErrs))
@@ -477,10 +483,12 @@ func fmtDur(d time.Duration) string {
 }
 
 func humanBytes(n uint64) string {
-	if n > 1<<20 {
+	// 用 >= 而不是 >：1024 B 应该显示成 1.00 KiB，1 MiB 应该显示成 1.00 MiB。
+	// 用 > 的话这两个整数值会掉到下一级单位，输出成 "1024 B" / "1024.00 KiB"。
+	if n >= 1<<20 {
 		return fmt.Sprintf("%.2f MiB", float64(n)/float64(1<<20))
 	}
-	if n > 1<<10 {
+	if n >= 1<<10 {
 		return fmt.Sprintf("%.2f KiB", float64(n)/float64(1<<10))
 	}
 	return fmt.Sprintf("%d B", n)
