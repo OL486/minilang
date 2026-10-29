@@ -14,6 +14,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -428,6 +429,12 @@ func runBench(o options) {
 		}
 	} else {
 		vm := engine.NewVM(io.Discard)
+		// --gc-off 在 bench 里同样要生效。原先只有 run/repl 的 session 读这个开关，
+		// bench 直接 NewVM 之后不关 GC，`bench --gc-off` 就被静默忽略：
+		// 参数被接受、输出正常，但对照实验实际没有生效。
+		if o.gcOff {
+			vm.SetGCEnabled(false)
+		}
 		fn, compErrs := compiler.CompileProgram(vm, stmts)
 		if len(compErrs) > 0 {
 			fmt.Fprintln(o.errOut, diag.RenderAll(src, compErrs))
@@ -457,7 +464,11 @@ func runBench(o options) {
 	fmt.Printf("  中位数:   %s\n", fmtDur(median))
 	fmt.Printf("  Go 堆: 运行前 %s -> 运行后 %s（差 %s）\n",
 		humanBytes(heapBefore), humanBytes(heapAfter), signedBytes(int64(heapAfter)-int64(heapBefore)))
-	fmt.Printf("  Go 源码行数: %d 行（非空非注释 %d 行）\n", locTotal, locCode)
+	if locTotal > 0 {
+		fmt.Printf("  Go 源码行数: %d 行（非空非注释 %d 行）\n", locTotal, locCode)
+	} else {
+		fmt.Println("  Go 源码行数: （无法统计：不在项目目录中运行）")
+	}
 }
 
 func medianDuration(ds []time.Duration) time.Duration {
@@ -472,10 +483,12 @@ func fmtDur(d time.Duration) string {
 }
 
 func humanBytes(n uint64) string {
-	if n > 1<<20 {
+	// 用 >= 而不是 >：1024 B 应该显示成 1.00 KiB，1 MiB 应该显示成 1.00 MiB。
+	// 用 > 的话这两个整数值会掉到下一级单位，输出成 "1024 B" / "1024.00 KiB"。
+	if n >= 1<<20 {
 		return fmt.Sprintf("%.2f MiB", float64(n)/float64(1<<20))
 	}
-	if n > 1<<10 {
+	if n >= 1<<10 {
 		return fmt.Sprintf("%.2f KiB", float64(n)/float64(1<<10))
 	}
 	return fmt.Sprintf("%d B", n)
@@ -513,8 +526,8 @@ func countLOC() (total, code int) {
 	if err != nil {
 		return 0, 0
 	}
-	_ = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() {
+	_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
 			return nil
 		}
 		if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
@@ -557,18 +570,37 @@ func countLOC() (total, code int) {
 }
 
 func moduleRoot() (string, error) {
+	// 优先从当前工作目录查找
 	dir, err := os.Getwd()
-	if err != nil {
-		return "", err
-	}
-	for {
-		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
-			return dir, nil
+	if err == nil {
+		for {
+			if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+				return dir, nil
+			}
+			parent := filepath.Dir(dir)
+			if parent == dir {
+				break
+			}
+			dir = parent
 		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return "", fmt.Errorf("找不到 go.mod")
-		}
-		dir = parent
 	}
+
+	// 如果从工作目录找不到，尝试从可执行文件路径查找
+	//（适用于直接运行项目目录中编译出的二进制文件）
+	ex, err := os.Executable()
+	if err == nil {
+		dir = filepath.Dir(ex)
+		for {
+			if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+				return dir, nil
+			}
+			parent := filepath.Dir(dir)
+			if parent == dir {
+				break
+			}
+			dir = parent
+		}
+	}
+
+	return "", fmt.Errorf("找不到 go.mod")
 }
