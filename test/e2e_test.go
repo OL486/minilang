@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/OL486/minilang/internal/ast"
 	"github.com/OL486/minilang/internal/compiler"
 	"github.com/OL486/minilang/internal/diag"
 	"github.com/OL486/minilang/internal/engine"
@@ -20,16 +21,27 @@ import (
 	"github.com/OL486/minilang/internal/tree"
 )
 
-// runVM 走完整流水线：词法 → 语法 → 编译 → 执行。
-func runVM(t *testing.T, src string) (string, error) {
+// parseSource 是两个引擎共用的搭建：词法 → 语法。
+// 以前 runVM/runTree 各写了一份，约 40 行重复。
+func parseSource(t *testing.T, src string) ([]ast.Stmt, error) {
 	t.Helper()
 	tokens, lexErrs := lexer.New(src).Scan()
 	if len(lexErrs) > 0 {
-		return "", lexErrs[0]
+		return nil, lexErrs[0]
 	}
 	stmts, parseErrs := parser.New(tokens).Parse()
 	if len(parseErrs) > 0 {
-		return "", parseErrs[0]
+		return nil, parseErrs[0]
+	}
+	return stmts, nil
+}
+
+// runVM 走完整流水线：词法 → 语法 → 编译 → 执行。
+func runVM(t *testing.T, src string) (string, error) {
+	t.Helper()
+	stmts, err := parseSource(t, src)
+	if err != nil {
+		return "", err
 	}
 	var out bytes.Buffer
 	vm := engine.NewVM(&out)
@@ -45,13 +57,9 @@ func runVM(t *testing.T, src string) (string, error) {
 
 func runTree(t *testing.T, src string) (string, error) {
 	t.Helper()
-	tokens, lexErrs := lexer.New(src).Scan()
-	if len(lexErrs) > 0 {
-		return "", lexErrs[0]
-	}
-	stmts, parseErrs := parser.New(tokens).Parse()
-	if len(parseErrs) > 0 {
-		return "", parseErrs[0]
+	stmts, err := parseSource(t, src)
+	if err != nil {
+		return "", err
 	}
 	var out bytes.Buffer
 	in := tree.New(&out)
@@ -309,13 +317,9 @@ let last = nil;
 while (i < 50000) { last = make(i); i = i + 1; }
 print last();
 `
-	tokens, lexErrs := lexer.New(src).Scan()
-	if len(lexErrs) > 0 {
-		t.Fatalf("词法错误: %v", lexErrs[0])
-	}
-	stmts, parseErrs := parser.New(tokens).Parse()
-	if len(parseErrs) > 0 {
-		t.Fatalf("语法错误: %v", parseErrs[0])
+	stmts, err := parseSource(t, src)
+	if err != nil {
+		t.Fatalf("解析错误: %v", err)
 	}
 	var out bytes.Buffer
 	vm := engine.NewVM(&out)
