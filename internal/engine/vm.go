@@ -18,7 +18,9 @@ const (
 	StackMax = 1024 * 32
 
 	// FramesMax 是调用帧上限，防止无限递归把 Go 的栈打爆。
-	FramesMax = 1024
+	// 与 tree 侧共用 semantics.MaxCallDepth：以前 VM 是 1024、tree 是 1000，
+	// 同一份深递归在 1001–1024 层时两个引擎行为不一致。
+	FramesMax = semantics.MaxCallDepth
 )
 
 // callFrame 是一个调用帧。
@@ -127,9 +129,9 @@ func (vm *VM) allocate(h *objHeader, typ ObjType, self Object, size int) {
 // InternString 把字符串放进驻留表，返回唯一实例。
 //
 // 驻留解决的是「字符串作为值要按内容比较，作为对象要按身份比较」这个矛盾：
-// 每次创建字符串都查表，内容相同就复用同一个对象。
-// 于是「内容相等」和「指针相等」变成同一件事，
-// == 可以只比较指针（见 valuesEqual），拼接出来的 "ab" 也能和字面量 "ab" 判等。
+// 每次创建字符串都查表，内容相同就复用同一个对象，省内存、省重复分配。
+// 注意：== 本身按内容比较（见 valuesEqual：toAny 把字符串对象转成 Go string
+// 再比较），不依赖指针相等；即使去掉驻留，== 语义仍正确。
 //
 // 代价：每次拼接都要做一次 map 查找 + 可能的分配。
 // 这也是 S5→S10 对比表里 VM 在字符串密集场景下不一定更快的原因之一。
@@ -137,7 +139,7 @@ func (vm *VM) InternString(s string) *ObjString {
 	if o, ok := vm.intern[s]; ok {
 		return o
 	}
-	o := &ObjString{Chars: s, Hash: hashString(s)}
+	o := &ObjString{Chars: s}
 	vm.allocate(&o.objHeader, ObjStringType, o, len(s)+40)
 	// 这里不能有分配操作：allocate 已经做过 GC，此时 o 还没进表，
 	// 一旦再触发一次 GC 就会被回收。所以紧接着插入。
