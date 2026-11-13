@@ -15,10 +15,10 @@ import (
 	"github.com/OL486/minilang/internal/ast"
 	"github.com/OL486/minilang/internal/compiler"
 	"github.com/OL486/minilang/internal/diag"
-	"github.com/OL486/minilang/internal/engine"
+	"github.com/OL486/minilang/internal/vm"
 	"github.com/OL486/minilang/internal/lexer"
 	"github.com/OL486/minilang/internal/parser"
-	"github.com/OL486/minilang/internal/tree"
+	"github.com/OL486/minilang/internal/treewalk"
 )
 
 // parseSource 是两个引擎共用的搭建：词法 → 语法。
@@ -44,7 +44,7 @@ func runVM(t *testing.T, src string) (string, error) {
 		return "", err
 	}
 	var out bytes.Buffer
-	vm := engine.NewVM(&out)
+	vm := vm.NewVM(&out)
 	fn, compErrs := compiler.CompileProgram(vm, stmts)
 	if len(compErrs) > 0 {
 		return "", compErrs[0]
@@ -62,7 +62,7 @@ func runTree(t *testing.T, src string) (string, error) {
 		return "", err
 	}
 	var out bytes.Buffer
-	in := tree.New(&out)
+	in := treewalk.New(&out)
 	if err := in.Run(stmts); err != nil {
 		return out.String(), err
 	}
@@ -322,7 +322,7 @@ print last();
 		t.Fatalf("解析错误: %v", err)
 	}
 	var out bytes.Buffer
-	vm := engine.NewVM(&out)
+	vm := vm.NewVM(&out)
 	fn, compErrs := compiler.CompileProgram(vm, stmts)
 	if len(compErrs) > 0 {
 		t.Fatalf("编译错误: %v", compErrs[0])

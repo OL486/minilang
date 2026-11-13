@@ -1,4 +1,4 @@
-package engine
+package vm
 
 import "github.com/OL486/minilang/internal/semantics"
 
@@ -119,7 +119,7 @@ func (v Value) TypeName() string {
 	return semantics.TypeName(v.toAny())
 }
 
-// Format 把值渲染成 print 的输出。必须与 tree.FormatValue 逐字节一致。
+// Format 把值渲染成 print 的输出。必须与 treewalk.FormatValue 逐字节一致。
 // 原始值部分由 semantics.FormatPrimitive 实现，这里只补对象分支。
 func Format(v Value) string {
 	if s, ok := semantics.FormatPrimitive(v.toAny()); ok {

@@ -1,4 +1,4 @@
-package engine
+package vm
 
 // ObjType 只用于调试输出与 GC 统计。VM 分派靠 Go 的类型断言，
 // 不靠这个标签 —— 两者并存是故意的：标签便宜，方便 --stats 打对象分布。

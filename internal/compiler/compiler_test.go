@@ -6,14 +6,14 @@ import (
 	"testing"
 
 	"github.com/OL486/minilang/internal/ast"
-	"github.com/OL486/minilang/internal/engine"
+	"github.com/OL486/minilang/internal/vm"
 	"github.com/OL486/minilang/internal/lexer"
 	"github.com/OL486/minilang/internal/parser"
 )
 
 // newTestCompiler 搭一个最小的编译器：一个空脚本函数，槽位 0 预留给脚本闭包自身。
-func newTestCompiler() (*Compiler, *engine.VM) {
-	vm := engine.NewVM(io.Discard)
+func newTestCompiler() (*Compiler, *vm.VM) {
+	vm := vm.NewVM(io.Discard)
 	fn := vm.NewFunction("", 0)
 	c := &Compiler{vm: vm, fn: &fnState{fn: fn, locals: []local{{name: "", depth: 0}}}}
 	return c, vm
@@ -23,8 +23,8 @@ func newTestCompiler() (*Compiler, *engine.VM) {
 // jump = 当前位置 - 操作数位置 - 2，少减 2 会让所有 if 分支多执行两条指令。
 func TestPatchJump(t *testing.T) {
 	c, _ := newTestCompiler()
-	offset := c.emitJump(engine.OpJump, 1)
-	c.emit(engine.OpNil, 1) // 1 条填充指令
+	offset := c.emitJump(vm.OpJump, 1)
+	c.emit(vm.OpNil, 1) // 1 条填充指令
 	c.patchJump(offset)
 
 	jump := int(c.chunk().Code[offset])<<8 | int(c.chunk().Code[offset+1])
@@ -74,7 +74,7 @@ func TestResolveLocalScope(t *testing.T) {
 // TestCompileProgramSimple 编译 `let x = 42; print x;`，
 // 顶层 let 应编译成全局变量定义，print 应发射 OP_PRINT。
 func TestCompileProgramSimple(t *testing.T) {
-	vm := engine.NewVM(io.Discard)
+	vm := vm.NewVM(io.Discard)
 	stmts := []ast.Stmt{
 		&ast.LetStmt{P: ast.Pos{Line: 1}, Name: "x", Init: &ast.Literal{P: ast.Pos{Line: 1}, Value: float64(42)}},
 		&ast.PrintStmt{P: ast.Pos{Line: 2}, Value: &ast.Variable{P: ast.Pos{Line: 2}, Name: "x"}},
@@ -116,7 +116,7 @@ print makeCounter()();
 	if len(parseErrs) > 0 {
 		t.Fatalf("语法错误: %v", parseErrs[0])
 	}
-	vm := engine.NewVM(io.Discard)
+	vm := vm.NewVM(io.Discard)
 	fn, compErrs := CompileProgram(vm, stmts)
 	if len(compErrs) > 0 {
 		t.Fatalf("编译错误: %v", compErrs[0])

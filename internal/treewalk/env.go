@@ -1,9 +1,9 @@
-// Package tree 是 tree-walking 解释器（S3–S4）。
+// Package treewalk 是 tree-walking 解释器（S3–S4）。
 //
 // 它的价值不是「能跑」，而是「能当参照物」：
 // 后面字节码 VM 的每一个语义细节（真值判断、类型错误、闭包捕获时机）
 // 都以它为基准做 diff。所以这里刻意写得直白，不做任何优化。
-package tree
+package treewalk
 
 import (
 	"github.com/OL486/minilang/internal/ast"

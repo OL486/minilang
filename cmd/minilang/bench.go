@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/OL486/minilang/internal/engine"
+	"github.com/OL486/minilang/internal/vm"
 	"github.com/OL486/minilang/internal/semantics"
-	"github.com/OL486/minilang/internal/tree"
+	"github.com/OL486/minilang/internal/treewalk"
 )
 
 // ---------- 基准测试 ----------
@@ -61,7 +61,7 @@ func runBench(o options) {
 		}
 		heapAfter := readHeap()
 		if v, ok := s.interp.Globals().Lookup("benchResult"); ok {
-			result = tree.FormatValue(v)
+			result = treewalk.FormatValue(v)
 		}
 		median := medianDuration(times)
 		fmt.Printf("  fib(30) = %s\n", result)
@@ -90,7 +90,7 @@ func runBench(o options) {
 		}
 		statsAfter := s.vm.Stats()
 		if v, ok := s.vm.Global("benchResult"); ok {
-			result = engine.Format(v)
+			result = vm.Format(v)
 		}
 		median := medianDuration(times)
 		fmt.Printf("  fib(30) = %s\n", result)

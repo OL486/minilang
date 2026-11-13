@@ -141,13 +141,13 @@ REPL 命令：`:help` `:quit` `:gc` `:stats`
 | S0 | 语言规范 | [`docs/00-spec.md`](docs/00-spec.md) | BNF + 优先级表 + 错误约定 |
 | S1 | 词法分析 + REPL | `internal/lexer/` `internal/token/` `internal/diag/` | `--dump-tokens` |
 | S2 | AST + Pratt 解析 | `internal/ast/` `internal/parser/` | `--dump-ast`，`*` 是 `+` 的子节点 |
-| S3 | 变量 / 作用域 / 控制流 | `internal/tree/env.go` `interp.go` | `while (i<5) { print i; i=i+1; }` |
-| S4 | 函数 / 调用帧 / 闭包 | `internal/tree/interp.go` | `makeCounter` 两个计数器互不干扰 |
+| S3 | 变量 / 作用域 / 控制流 | `internal/treewalk/env.go` `interp.go` | `while (i<5) { print i; i=i+1; }` |
+| S4 | 函数 / 调用帧 / 闭包 | `internal/treewalk/interp.go` | `makeCounter` 两个计数器互不干扰 |
 | S5 | 性能基线 | `cmd/minilang/main.go` (`bench`) | [`docs/03-benchmark.md`](docs/03-benchmark.md) |
-| S6 | 字节码编译器 + 反汇编 | `internal/compiler/` `internal/engine/chunk.go` | `--dump-bytecode` |
-| S7 | VM 执行循环 + 跳转 + 局部变量 | `internal/engine/vm.go` | while 循环结果与 S3 一致 |
-| S8 | VM 里的函数 / 帧 / upvalue | `internal/engine/vm.go` `object.go` | `makeCounter` 在 VM 上一致 |
-| S9 | 标记-清除 GC | `internal/engine/gc.go` | `examples/05-gc-stress.ml --stats` |
+| S6 | 字节码编译器 + 反汇编 | `internal/compiler/` `internal/vm/chunk.go` | `--dump-bytecode` |
+| S7 | VM 执行循环 + 跳转 + 局部变量 | `internal/vm/vm.go` | while 循环结果与 S3 一致 |
+| S8 | VM 里的函数 / 帧 / upvalue | `internal/vm/vm.go` `object.go` | `makeCounter` 在 VM 上一致 |
+| S9 | 标记-清除 GC | `internal/vm/gc.go` | `examples/05-gc-stress.ml --stats` |
 | S10 | 收尾对比 | [`docs/03-benchmark.md`](docs/03-benchmark.md) | 约 8× 加速 |
 
 ---

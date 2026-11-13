@@ -1,4 +1,4 @@
-package tree
+package treewalk
 
 import (
 	"fmt"
@@ -323,7 +323,7 @@ func mismatch(op token.Type, l, r any, p ast.Pos) error {
 }
 
 // FormatValue 把内部值渲染成 print 的输出。
-// 与 VM 侧的 engine.Format 必须逐字节一致，否则两个引擎的 diff 回归会失效。
+// 与 VM 侧的 vm.Format 必须逐字节一致，否则两个引擎的 diff 回归会失效。
 // 原始值部分由 semantics.FormatPrimitive 实现，这里只补函数值分支。
 func FormatValue(v any) string {
 	if s, ok := semantics.FormatPrimitive(v); ok {
