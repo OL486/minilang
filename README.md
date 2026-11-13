@@ -31,8 +31,8 @@ print c1();   // 3
 同一份源码、同一份 AST，可以走两条完全不同的执行路径：
 
 ```
-源码 ──lexer──> []Token ──parser──> []ast.Stmt ──┬── tree.Interp  （直接遍历 AST）
-                                                └── compiler ──> 字节码 ──> engine.VM
+源码 ──lexer──> []Token ──parser──> []ast.Stmt ──┬── treewalk.Interp  （直接遍历 AST）
+                                                └── compiler ──> 字节码 ──> vm.VM
 ```
 
 `--engine=tree` / `--engine=vm` 切换。**两个引擎的输出必须逐字节相同** ——
@@ -141,10 +141,10 @@ REPL 命令：`:help` `:quit` `:gc` `:stats`
 | S0 | 语言规范 | [`docs/00-spec.md`](docs/00-spec.md) | BNF + 优先级表 + 错误约定 |
 | S1 | 词法分析 + REPL | `internal/lexer/` `internal/token/` `internal/diag/` | `--dump-tokens` |
 | S2 | AST + Pratt 解析 | `internal/ast/` `internal/parser/` | `--dump-ast`，`*` 是 `+` 的子节点 |
-| S3 | 变量 / 作用域 / 控制流 | `internal/treewalk/env.go` `interp.go` | `while (i<5) { print i; i=i+1; }` |
-| S4 | 函数 / 调用帧 / 闭包 | `internal/treewalk/interp.go` | `makeCounter` 两个计数器互不干扰 |
+| S3 | 变量 / 作用域 / 控制流 | `internal/treewalk/env.go` `interp.go` `stmt.go` `eval.go` | `while (i<5) { print i; i=i+1; }` |
+| S4 | 函数 / 调用帧 / 闭包 | `internal/treewalk/interp.go` `call.go` | `makeCounter` 两个计数器互不干扰 |
 | S5 | 性能基线 | `cmd/minilang/main.go` (`bench`) | [`docs/03-benchmark.md`](docs/03-benchmark.md) |
-| S6 | 字节码编译器 + 反汇编 | `internal/compiler/` `internal/vm/chunk.go` | `--dump-bytecode` |
+| S6 | 字节码编译器 + 反汇编 | `internal/compiler/` `internal/vm/chunk.go` `disasm.go` | `--dump-bytecode` |
 | S7 | VM 执行循环 + 跳转 + 局部变量 | `internal/vm/run.go` | while 循环结果与 S3 一致 |
 | S8 | VM 里的函数 / 帧 / upvalue | `internal/vm/call.go` `internal/vm/upvalue.go` `object.go` | `makeCounter` 在 VM 上一致 |
 | S9 | 标记-清除 GC | `internal/vm/gc.go` | `examples/05-gc-stress.ml --stats` |
@@ -207,7 +207,7 @@ done
 
 - 没有类 / 对象 / 数组 / 哈希表（按规范排除）
 - 没有匿名函数（lambda）、没有 `break` / `continue`
-- 没有尾调用优化，深递归会撞调用帧上限（VM 1024，tree 1000）
+- 没有尾调用优化，深递归会撞调用帧上限（双引擎共用 1000 层）
 - 单函数常量 / 局部变量 / upvalue 上限各 256（单字节操作数）
 - 字符串不可跨行，转义只支持 `\\ \" \n \t \r`
 - 只有 ASCII 标识符

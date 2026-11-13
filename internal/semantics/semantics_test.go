@@ -156,7 +156,7 @@ func TestFormatPrimitive(t *testing.T) {
 
 func TestOpText(t *testing.T) {
 	// token.OpText 是全仓库唯一一份运算符文本表，
-	// 这里重点回归以前 tree 侧缺失的三项。
+	// 这里重点回归以前 treewalk 侧缺失的三项。
 	if got := token.OpText(token.Bang); got != "!" {
 		t.Errorf("OpText(Bang) = %q, want %q", got, "!")
 	}

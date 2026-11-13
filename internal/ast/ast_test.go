@@ -29,7 +29,7 @@ func TestDump(t *testing.T) {
 			t.Errorf("Dump missing %q:\n%s", want, out)
 		}
 	}
-	// 逻辑与一元运算符也走同一份运算符文本表（以前 tree 侧缺 !、&&、||）。
+	// 逻辑与一元运算符也走同一份运算符文本表（以前 treewalk 侧缺 !、&&、||）。
 	out = dump(t, "print !a && b || c;")
 	for _, want := range []string{"Unary(!)", "Logical(&&)", "Logical(||)"} {
 		if !strings.Contains(out, want) {
