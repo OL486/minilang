@@ -38,7 +38,9 @@ func TestHumanBytes(t *testing.T) {
 	}{
 		{0, "0 B"},
 		{512, "512 B"},
+		{1024, "1.00 KiB"},
 		{2048, "2.00 KiB"},
+		{1 << 20, "1.00 MiB"},
 		{2 << 20, "2.00 MiB"},
 	}
 	for _, c := range cases {
