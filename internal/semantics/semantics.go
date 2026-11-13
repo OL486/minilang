@@ -1,14 +1,14 @@
 // Package semantics 是 tree-walking 解释器与字节码 VM 共用的语义核心。
 //
 // 两个引擎以前各写了一份真值、类型名、==、打印、二元运算和运算符文本，
-// 而且已经漂移（例如 tree 侧的 opText 没有 !、&&、||）。
-// 这里只留一份实现，tree 和 engine 只做薄适配：
-//   - tree 的值是 Go 的 any（nil/bool/float64/string/函数），直接调这里的函数；
-//   - engine 的值是带标签的 Value，先转成 any 再调这里的函数，
-//     字符串比较按内容比较：engine 先把字符串对象转成 Go string 再调这里的函数，
+// 而且已经漂移（例如 treewalk 侧的 opText 没有 !、&&、||）。
+// 这里只留一份实现，treewalk 和 vm 只做薄适配：
+//   - treewalk 的值是 Go 的 any（nil/bool/float64/string/函数），直接调这里的函数；
+//   - vm 的值是带标签的 Value，先转成 any 再调这里的函数，
+//     字符串比较按内容比较：vm 先把字符串对象转成 Go string 再调这里的函数，
 //     即使去掉驻留，== 语义仍正确；驻留只做去重，不参与相等判断。
 //
-// 本包是纯语义，不依赖 diag、ast、tree、engine，因此不会形成 import 环。
+// 本包是纯语义，不依赖 diag、ast、treewalk、vm，因此不会形成 import 环。
 package semantics
 
 import (
@@ -53,7 +53,7 @@ func HumanBytes(n uint64) string {
 }
 
 // MaxCallDepth 是双引擎共用的调用深度上限。
-// tree 侧以前是 1000、VM 侧是 1024，同一份深递归程序在 1001–1024 层时
+// treewalk 侧以前是 1000、VM 侧是 1024，同一份深递归程序在 1001–1024 层时
 // 两个引擎行为不一致；统一为 1000 后，双引擎一致性承诺在边界处也成立。
 const MaxCallDepth = 1000
 
@@ -83,7 +83,7 @@ func Truthy(v any) bool {
 }
 
 // TypeName 返回值在错误信息里的类型名。
-// 未知类型按 Go 类型名打印，与原来 tree 侧的行为一致。
+// 未知类型按 Go 类型名打印，与原来 treewalk 侧的行为一致。
 func TypeName(v any) string {
 	switch v.(type) {
 	case nil:
@@ -123,7 +123,7 @@ func Equal(l, r any) bool {
 }
 
 // FormatPrimitive 把原始值渲染成 print 的输出。
-// 函数值不在这里处理：tree 与 engine 的函数类型不同，
+// 函数值不在这里处理：treewalk 与 vm 的函数类型不同，
 // 各自在薄适配层里补上函数分支，原始值部分只留这一份。
 func FormatPrimitive(v any) (string, bool) {
 	switch x := v.(type) {

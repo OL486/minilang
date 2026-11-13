@@ -232,7 +232,7 @@ false && f()     // => false，f() 不会被调用
 | 调用实参个数 | 255 | 编译错误 |
 | 跳转距离 | 65535 字节 | 编译错误 |
 | 操作数栈 | 32768 槽（VM） | 运行时错误 |
-| 调用帧 | 1024（VM）/ 1000（tree） | 运行时错误 |
+| 调用帧 | 1000（双引擎共用 semantics.MaxCallDepth） | 运行时错误 |
 | 单次报错数量 | 20 条 | 之后停止解析 |
 
 前 5 条来自「单字节操作数」这个设计决定，见 `docs/01-pipeline.md`。
@@ -284,11 +284,16 @@ minilang/
 │   ├── parser/parser.go            S2 递归下降 + Pratt
 │   ├── treewalk/                        S3–S4 tree-walking 解释器
 │   │   ├── env.go                  环境链
-│   │   └── interp.go               求值器
+│   │   ├── interp.go               解释器结构、创建、Run
+│   │   ├── stmt.go                 语句执行
+│   │   ├── eval.go                 表达式求值
+│   │   ├── call.go                 函数调用（含 return 的 panic 跳转）
+│   │   └── format.go               二元运算适配与值打印
 │   ├── vm/                      S6–S9 字节码运行时
 │   │   ├── value.go                Value 表示 + 相等语义 + 格式化
 │   │   ├── object.go               堆对象（string/function/closure/upvalue/native）
-│   │   ├── chunk.go                Op 定义 + Chunk + 反汇编（--dump-bytecode）
+│   │   ├── chunk.go                Op 定义 + Chunk
+│   │   ├── disasm.go               反汇编（--dump-bytecode）
 │   │   ├── vm.go                   VM 结构、创建、统计
 │   │   ├── run.go                  分派循环
 │   │   ├── stack.go                操作数栈

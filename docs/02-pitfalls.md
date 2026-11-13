@@ -96,7 +96,7 @@ OP_POP                       ; 条件为假时弹掉条件值
 
 ```go
 func (c *Compiler) emitLoop(loopStart, line int) {
-	c.emit(engine.OpLoop, line)
+	c.emit(vm.OpLoop, line)
 	// +2 是操作数自身的长度：VM 读完操作数后 ip 已指向下一条指令，
 	// 要减掉「opcode + 2 字节操作数」才能回到循环开头。
 	offset := len(c.chunk().Code) - loopStart + 2

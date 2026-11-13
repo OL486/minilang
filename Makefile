@@ -55,7 +55,7 @@ fmt-check:
 check: fmt-check vet test
 	@echo "check: all green"
 
-## release: 交叉编译 5 个平台并打包到 dist/
+## release: 交叉编译 6 个平台并打包到 dist/
 release:
 	go run tools/pack/main.go
 

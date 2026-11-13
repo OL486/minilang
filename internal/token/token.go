@@ -137,8 +137,8 @@ func LookupIdent(s string) Type {
 }
 
 // OpText 返回运算符在源码/错误信息里的文本。
-// 这是全仓库唯一一份运算符文本表：ast 的 Dump、tree 的报错、
-// engine 的报错都用它。以前 tree 侧缺 !、&&、||，就是因为各写了一份。
+// 这是全仓库唯一一份运算符文本表：ast 的 Dump、treewalk 的报错、
+// vm 的报错都用它。以前 treewalk 侧缺 !、&&、||，就是因为各写了一份。
 func OpText(t Type) string {
 	switch t {
 	case Plus:
