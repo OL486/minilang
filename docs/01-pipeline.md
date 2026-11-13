@@ -151,8 +151,8 @@ then 分支执行完要跳过 else。`32 + 3 + 4 = 39`。
 所以先写两个 `0xff` 占位，等编译到目标位置再回头改。核心就两个函数：
 
 ```go
-// internal/compiler/compiler.go
-func (c *Compiler) emitJump(op engine.Op, line int) int {
+// internal/compiler/emit.go
+func (c *Compiler) emitJump(op vm.Op, line int) int {
 	c.emit(op, line)
 	c.emitByte(0xff, line)   // 占位：高字节
 	c.emitByte(0xff, line)   // 占位：低字节

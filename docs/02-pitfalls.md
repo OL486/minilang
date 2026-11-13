@@ -12,7 +12,7 @@
 **绝对槽位**：`OP_SET_LOCAL n` 表示「本帧的槽位 0 加 n」，而槽位 0 在帧里的位置由
 `callFrame.slotBase` 记录。
 
-**本实现用绝对槽位**。`vm.go` 里的读法是：
+**本实现用绝对槽位**。`run.go` 里的读法是：
 
 ```go
 case OpSetLocal:
@@ -65,7 +65,7 @@ OP_SET_LOCAL n   ; 把栈顶写到第 n 个变量
 
 `if` / `while` 编译时目标地址还不知道。本实现先发两个 `0xff` 占位，编译到目标再回填。
 
-`if` 的形状（`internal/compiler/compiler.go` 的 `ifStmt`）：
+`if` 的形状（`internal/compiler/stmt.go` 的 `ifStmt`）：
 
 ```
 <cond>
