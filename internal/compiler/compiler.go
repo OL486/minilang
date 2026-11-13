@@ -552,7 +552,8 @@ func (c *Compiler) literal(n *ast.Literal) {
 		c.emit(engine.OpConstant, n.P.Line)
 		c.emitByte(byte(idx), n.P.Line)
 	case string:
-		// 字符串常量也走驻留表：这样运行期比较两个同内容字符串时指针相等。
+		// 字符串常量也走驻留表：同一内容复用同一对象，省内存。
+		// == 本身按内容比较（见 engine.valuesEqual），不依赖指针相等。
 		s := c.vm.InternString(v)
 		idx := c.addConstant(engine.ObjValue(s), n.P.Line)
 		c.emit(engine.OpConstant, n.P.Line)
