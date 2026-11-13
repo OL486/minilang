@@ -38,13 +38,20 @@ func runBench(o options) {
 
 	fmt.Printf("minilang 基准测试  engine=%s  fib(30)\n", o.engine)
 
+	// 5 次取中位数，跑之前先预热 1 次（让 GC、JIT 预热与首次分配的抖动
+	// 不进测量区间）。README/docs 里的 benchmark 数字是旧口径（3 次、无预热）
+	// 测出来的，本轮只改测量口径、不改数字，待 CI 重测后再同步更新。
+	const benchRuns = 5
 	var times []time.Duration
 	var result string
-	var heapBefore, heapAfter uint64
 
 	if o.engine == "tree" {
-		heapBefore = readHeap()
-		for i := 0; i < 3; i++ {
+		heapBefore := readHeap()
+		if err := s.runTree(stmts); err != nil { // 预热
+			fmt.Fprintln(o.errOut, "执行失败:", err)
+			os.Exit(1)
+		}
+		for i := 0; i < benchRuns; i++ {
 			start := time.Now()
 			if err := s.runTree(stmts); err != nil {
 				fmt.Fprintln(o.errOut, "执行失败:", err)
@@ -52,18 +59,28 @@ func runBench(o options) {
 			}
 			times = append(times, time.Since(start))
 		}
-		heapAfter = readHeap()
+		heapAfter := readHeap()
 		if v, ok := s.interp.Globals().Lookup("benchResult"); ok {
 			result = tree.FormatValue(v)
 		}
+		median := medianDuration(times)
+		fmt.Printf("  fib(30) = %s\n", result)
+		fmt.Printf("  五次耗时: %s\n", joinDurations(times))
+		fmt.Printf("  中位数:   %s\n", fmtDur(median))
+		fmt.Printf("  Go 堆: 运行前 %s -> 运行后 %s（差 %s）\n",
+			semantics.HumanBytes(heapBefore), semantics.HumanBytes(heapAfter), semantics.SignedBytes(int64(heapAfter)-int64(heapBefore)))
 	} else {
-		// 编译一次（反汇编在这里打印一次），只计时三次执行。
+		// 编译一次（反汇编在这里打印一次），只计时执行，不含编译。
 		fn, ok := s.compile(stmts, "<bench>", benchSource)
 		if !ok {
 			os.Exit(1)
 		}
-		heapBefore = readHeap()
-		for i := 0; i < 3; i++ {
+		statsBefore := s.vm.Stats()
+		if _, err := s.runCompiled(fn); err != nil { // 预热
+			fmt.Fprintln(o.errOut, "执行失败:", err)
+			os.Exit(1)
+		}
+		for i := 0; i < benchRuns; i++ {
 			start := time.Now()
 			if _, err := s.runCompiled(fn); err != nil {
 				fmt.Fprintln(o.errOut, "执行失败:", err)
@@ -71,20 +88,32 @@ func runBench(o options) {
 			}
 			times = append(times, time.Since(start))
 		}
-		heapAfter = readHeap()
+		statsAfter := s.vm.Stats()
 		if v, ok := s.vm.Global("benchResult"); ok {
 			result = engine.Format(v)
 		}
+		median := medianDuration(times)
+		fmt.Printf("  fib(30) = %s\n", result)
+		fmt.Printf("  五次耗时: %s\n", joinDurations(times))
+		fmt.Printf("  中位数:   %s\n", fmtDur(median))
+		// VM 对象堆（Stats）比 Go 堆更能说明问题：Go 堆含 Go 自身分配的噪声，
+		// Stats 只数 VM 对象（存活数 / 字节数 / GC 次数 / 累计创建数）。
+		fmt.Printf("  VM 对象堆: 运行前 %d 对象 %s -> 运行后 %d 对象 %s（GC %d -> %d 次，累计创建 %d 对象）\n",
+			statsBefore.Objects, semantics.HumanBytes(uint64(statsBefore.Bytes)),
+			statsAfter.Objects, semantics.HumanBytes(uint64(statsAfter.Bytes)),
+			statsBefore.GCRuns, statsAfter.GCRuns, statsAfter.ObjectsTotal)
 	}
 
-	median := medianDuration(times)
-	fmt.Printf("  fib(30) = %s\n", result)
-	fmt.Printf("  三次耗时: %s, %s, %s\n", fmtDur(times[0]), fmtDur(times[1]), fmtDur(times[2]))
-	fmt.Printf("  中位数:   %s\n", fmtDur(median))
-	fmt.Printf("  Go 堆: 运行前 %s -> 运行后 %s（差 %s）\n",
-		semantics.HumanBytes(heapBefore), semantics.HumanBytes(heapAfter), semantics.SignedBytes(int64(heapAfter)-int64(heapBefore)))
 	total, code := locCounts()
 	fmt.Printf("  Go 源码行数: %d 行（非空非注释 %d 行）\n", total, code)
+}
+
+func joinDurations(ds []time.Duration) string {
+	parts := make([]string, len(ds))
+	for i, d := range ds {
+		parts[i] = fmtDur(d)
+	}
+	return strings.Join(parts, ", ")
 }
 
 func medianDuration(ds []time.Duration) time.Duration {
