@@ -3,6 +3,10 @@
 # 只需要 Go 1.22+，不需要 make 之外的任何工具：
 # `make release` 会交叉编译全部平台并用 Go 自己打包（tools/pack），
 # 不依赖 zip/tar/sha256sum 这些在 Windows 上不齐的命令。
+#
+# SHELL 显式指定 bash：examples 配方用了 bash 进程替换 <(...)，
+# GNU make 默认用 /bin/sh（dash），在 Linux 上会直接失败。
+SHELL := /bin/bash
 
 BINARY  := minilang
 VERSION := $(shell sed -n 's/^const version = "\(.*\)"/\1/p' cmd/minilang/main.go)
