@@ -35,6 +35,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/OL486/minilang/internal/semantics"
 )
 
 // target 是一个发布目标。不追求覆盖所有 GOARCH，
@@ -180,7 +182,7 @@ func buildOne(t target, version, buildDir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	fmt.Printf("  %-42s %8s  %d 个文件\n", filepath.Base(archivePath), humanSize(size), len(files))
+	fmt.Printf("  %-42s %8s  %d 个文件\n", filepath.Base(archivePath), semantics.HumanBytes(uint64(size)), len(files))
 	return archivePath, nil
 }
 
@@ -342,18 +344,4 @@ func fileSize(path string) (int64, error) {
 		return 0, err
 	}
 	return info.Size(), nil
-}
-
-// humanSize 把字节数格式化成 3 位有效宽度，便于对齐。
-func humanSize(n int64) string {
-	const unit = 1024
-	if n < unit {
-		return fmt.Sprintf("%4d B", n)
-	}
-	div, exp := int64(unit), 0
-	for v := n / unit; v >= unit && exp < 2; v /= unit {
-		div *= unit
-		exp++
-	}
-	return fmt.Sprintf("%.1f %cB", float64(n)/float64(div), "KMGT"[exp])
 }

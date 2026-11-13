@@ -3,12 +3,11 @@ package tree
 import (
 	"fmt"
 	"io"
-	"math"
 	"time"
 
 	"github.com/OL486/minilang/internal/ast"
 	"github.com/OL486/minilang/internal/diag"
-	"github.com/OL486/minilang/internal/numfmt"
+	"github.com/OL486/minilang/internal/semantics"
 	"github.com/OL486/minilang/internal/token"
 )
 
@@ -120,7 +119,7 @@ func (in *Interp) execStmt(s ast.Stmt, env *Env) error {
 		if err != nil {
 			return err
 		}
-		if truthy(cond) {
+		if semantics.Truthy(cond) {
 			return in.execBlock(n.Then, NewEnv(env))
 		}
 		if len(n.Else) > 0 {
@@ -134,7 +133,7 @@ func (in *Interp) execStmt(s ast.Stmt, env *Env) error {
 			if err != nil {
 				return err
 			}
-			if !truthy(cond) {
+			if !semantics.Truthy(cond) {
 				return nil
 			}
 			if err := in.execBlock(n.Body, NewEnv(env)); err != nil {
@@ -190,11 +189,11 @@ func (in *Interp) eval(e ast.Expr, env *Env) (any, error) {
 		}
 		switch n.Op {
 		case token.Bang:
-			return !truthy(v), nil
+			return !semantics.Truthy(v), nil
 		case token.Minus:
 			f, ok := v.(float64)
 			if !ok {
-				return nil, diag.New(diag.StageRuntime, n.P.Line, n.P.Col, "一元 - 只能作用于 number，实际是 %s", typeName(v))
+				return nil, diag.New(diag.StageRuntime, n.P.Line, n.P.Col, "一元 - 只能作用于 number，实际是 %s", semantics.TypeName(v))
 			}
 			return -f, nil
 		}
@@ -209,11 +208,11 @@ func (in *Interp) eval(e ast.Expr, env *Env) (any, error) {
 			return nil, err
 		}
 		if n.Op == token.OrOr {
-			if truthy(l) {
+			if semantics.Truthy(l) {
 				return l, nil
 			}
 		} else {
-			if !truthy(l) {
+			if !semantics.Truthy(l) {
 				return l, nil
 			}
 		}
@@ -268,7 +267,7 @@ func (in *Interp) callValue(callee any, args []any, p ast.Pos) (any, error) {
 		}
 		return v, nil
 	}
-	return nil, diag.New(diag.StageRuntime, p.Line, p.Col, "%s 不是函数，不能调用", typeName(callee))
+	return nil, diag.New(diag.StageRuntime, p.Line, p.Col, "%s 不是函数，不能调用", semantics.TypeName(callee))
 }
 
 func (in *Interp) callUser(fn *Function, args []any) (result any, err error) {
@@ -304,195 +303,38 @@ func (in *Interp) callUser(fn *Function, args []any) (result any, err error) {
 }
 
 // ---------- 语义辅助 ----------
-
-// truthy 定义真值：只有 false 和 nil 是假，其余（含 0 和 ""）都是真。
 //
-// 为什么 0 是真：如果 0 是假，`if (n) {...}` 在 n 为 0 时会静默走 else 分支，
-// 而 minilang 没有类型系统来提醒你 n 是 number 还是 bool。
-// 只把 false/nil 当假，规则最少、最容易预测。
-func truthy(v any) bool {
-	switch x := v.(type) {
-	case nil:
-		return false
-	case bool:
-		return x
-	}
-	return true
-}
-
-func typeName(v any) string {
-	switch v.(type) {
-	case nil:
-		return "nil"
-	case bool:
-		return "bool"
-	case float64:
-		return "number"
-	case string:
-		return "string"
-	case *Function, *NativeFn:
-		return "function"
-	}
-	return fmt.Sprintf("%T", v)
-}
+// 真值、类型名、==、二元运算、运算符文本的唯一实现在 internal/semantics，
+// 这里只剩薄适配：二元运算的 diag 错误包装，以及函数值的打印分支
+// （tree 的函数类型与 VM 的不同，原始值部分由 semantics.FormatPrimitive 负责）。
 
 func binaryOp(op token.Type, l, r any, p ast.Pos) (any, error) {
-	switch op {
-	case token.Plus:
-		if a, ok := l.(float64); ok {
-			if b, ok := r.(float64); ok {
-				return a + b, nil
-			}
-		}
-		if a, ok := l.(string); ok {
-			if b, ok := r.(string); ok {
-				return a + b, nil
-			}
-		}
-		return nil, mismatch(op, l, r, p)
-
-	case token.Minus, token.Star, token.Slash, token.Percent:
-		a, ok1 := l.(float64)
-		b, ok2 := r.(float64)
-		if !ok1 || !ok2 {
-			return nil, mismatch(op, l, r, p)
-		}
-		switch op {
-		case token.Minus:
-			return a - b, nil
-		case token.Star:
-			return a * b, nil
-		case token.Slash:
-			// 不检查除零：float64 的 1/0 是 +Inf，NaN 也是合法结果。
-			// 加一个「除零错误」会让 `1/0` 和 `0/0` 走不同路径，
-			// 而 IEEE 754 已经定义好了这两种情况。
-			return a / b, nil
-		default:
-			return math.Mod(a, b), nil
-		}
-
-	case token.Eq:
-		return equalValues(l, r), nil
-	case token.Ne:
-		return !equalValues(l, r), nil
-
-	case token.Lt, token.Le, token.Gt, token.Ge:
-		if a, ok := l.(float64); ok {
-			if b, ok := r.(float64); ok {
-				return compareNumbers(op, a, b), nil
-			}
-		}
-		if a, ok := l.(string); ok {
-			if b, ok := r.(string); ok {
-				return compareStrings(op, a, b), nil
-			}
-		}
-		return nil, mismatch(op, l, r, p)
+	if !semantics.IsBinaryOperator(op) {
+		return nil, diag.New(diag.StageRuntime, p.Line, p.Col, "内部错误：未知二元运算符 %s", op)
 	}
-	return nil, diag.New(diag.StageRuntime, p.Line, p.Col, "内部错误：未知二元运算符 %s", op)
-}
-
-func compareNumbers(op token.Type, a, b float64) bool {
-	switch op {
-	case token.Lt:
-		return a < b
-	case token.Le:
-		return a <= b
-	case token.Gt:
-		return a > b
-	default:
-		return a >= b
+	if v, ok := semantics.BinaryOp(op, l, r); ok {
+		return v, nil
 	}
-}
-
-func compareStrings(op token.Type, a, b string) bool {
-	switch op {
-	case token.Lt:
-		return a < b
-	case token.Le:
-		return a <= b
-	case token.Gt:
-		return a > b
-	default:
-		return a >= b
-	}
+	return nil, mismatch(op, l, r, p)
 }
 
 func mismatch(op token.Type, l, r any, p ast.Pos) error {
 	return diag.New(diag.StageRuntime, p.Line, p.Col,
-		"运算符 %s 不支持 %s 与 %s", opText(op), typeName(l), typeName(r))
-}
-
-func opText(t token.Type) string {
-	switch t {
-	case token.Plus:
-		return "+"
-	case token.Minus:
-		return "-"
-	case token.Star:
-		return "*"
-	case token.Slash:
-		return "/"
-	case token.Percent:
-		return "%"
-	case token.Eq:
-		return "=="
-	case token.Ne:
-		return "!="
-	case token.Lt:
-		return "<"
-	case token.Le:
-		return "<="
-	case token.Gt:
-		return ">"
-	case token.Ge:
-		return ">="
-	}
-	return t.String()
-}
-
-// equalValues 是 == 的语义：不同类型之间比较一律 false，不报错。
-//
-// 为什么跨类型比较不报错：`nil == f()` 是很常见的写法，
-// 如果 number 与 nil 比较就报错，这段代码没法写。
-// 而 `<` 这类大小比较必须同类型，所以那边会报错。
-func equalValues(l, r any) bool {
-	switch a := l.(type) {
-	case nil:
-		return r == nil
-	case bool:
-		b, ok := r.(bool)
-		return ok && a == b
-	case float64:
-		b, ok := r.(float64)
-		return ok && a == b
-	case string:
-		b, ok := r.(string)
-		return ok && a == b
-	}
-	// 函数值按身份比较：同一个函数对象才相等。
-	return l == r
+		"运算符 %s 不支持 %s 与 %s", token.OpText(op), semantics.TypeName(l), semantics.TypeName(r))
 }
 
 // FormatValue 把内部值渲染成 print 的输出。
 // 与 VM 侧的 engine.Format 必须逐字节一致，否则两个引擎的 diff 回归会失效。
+// 原始值部分由 semantics.FormatPrimitive 实现，这里只补函数值分支。
 func FormatValue(v any) string {
+	if s, ok := semantics.FormatPrimitive(v); ok {
+		return s
+	}
 	switch x := v.(type) {
-	case nil:
-		return "nil"
-	case bool:
-		if x {
-			return "true"
-		}
-		return "false"
-	case float64:
-		return numfmt.Number(x)
-	case string:
-		return x
 	case *Function:
-		return "<fn " + x.Decl.Name + ">"
+		return semantics.FormatFunc(x.Decl.Name, false)
 	case *NativeFn:
-		return "<native fn " + x.Name + ">"
+		return semantics.FormatFunc(x.Name, true)
 	}
 	return fmt.Sprintf("%v", v)
 }

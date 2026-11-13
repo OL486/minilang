@@ -1,6 +1,6 @@
 package engine
 
-import "github.com/OL486/minilang/internal/numfmt"
+import "github.com/OL486/minilang/internal/semantics"
 
 // Kind 是值的运行时标签。
 //
@@ -80,62 +80,60 @@ func (v Value) IsCallable() bool {
 	return v.IsClosure() || v.IsNative()
 }
 
-// Truthy 与 tree 包保持一致：只有 nil 和 false 是假。
-func (v Value) Truthy() bool {
+// toAny 把 VM 值转成 Go 原生值，供 semantics 的共享实现使用。
+// 字符串对象转成 Go string 时内容相等即相等；
+// 函数/闭包对象保持指针身份，与原来 valuesEqual 的指针比较一致。
+func (v Value) toAny() any {
 	switch v.kind {
 	case KindNil:
-		return false
+		return nil
 	case KindBool:
 		return v.num != 0
+	case KindNumber:
+		return v.num
+	case KindObject:
+		if s := v.AsString(); s != nil {
+			return s.Chars
+		}
+		return v.obj
 	}
-	return true
+	return nil
 }
 
-// TypeName 用于错误信息。
+// Truthy 与 tree 包保持一致：只有 nil 和 false 是假。
+// 实现在 semantics.Truthy，只留这一行薄适配。
+func (v Value) Truthy() bool { return semantics.Truthy(v.toAny()) }
+
+// TypeName 用于错误信息。原始值部分用 semantics.TypeName，
+// 对象部分按对象类型区分（字符串/函数/其他对象）。
 func (v Value) TypeName() string {
-	switch v.kind {
-	case KindNil:
-		return "nil"
-	case KindBool:
-		return "bool"
-	case KindNumber:
-		return "number"
-	case KindObject:
+	if v.kind == KindObject {
 		switch v.obj.(type) {
 		case *ObjString:
 			return "string"
 		case *ObjClosure, *ObjNative, *ObjFunction:
 			return "function"
 		}
+		return "object"
 	}
-	return "object"
+	return semantics.TypeName(v.toAny())
 }
 
 // Format 把值渲染成 print 的输出。必须与 tree.FormatValue 逐字节一致。
+// 原始值部分由 semantics.FormatPrimitive 实现，这里只补对象分支。
 func Format(v Value) string {
-	switch v.kind {
-	case KindNil:
-		return "nil"
-	case KindBool:
-		if v.num != 0 {
-			return "true"
-		}
-		return "false"
-	case KindNumber:
-		return numfmt.Number(v.num)
-	case KindObject:
-		switch o := v.obj.(type) {
-		case *ObjString:
-			return o.Chars
-		case *ObjClosure:
-			return "<fn " + displayName(o.Fn.Name) + ">"
-		case *ObjFunction:
-			return "<fn " + displayName(o.Name) + ">"
-		case *ObjNative:
-			return "<native fn " + o.Name + ">"
-		case *ObjUpvalue:
-			return "<upvalue>"
-		}
+	if s, ok := semantics.FormatPrimitive(v.toAny()); ok {
+		return s
+	}
+	switch o := v.obj.(type) {
+	case *ObjClosure:
+		return semantics.FormatFunc(displayName(o.Fn.Name), false)
+	case *ObjFunction:
+		return semantics.FormatFunc(displayName(o.Name), false)
+	case *ObjNative:
+		return semantics.FormatFunc(o.Name, true)
+	case *ObjUpvalue:
+		return "<upvalue>"
 	}
 	return "<unknown>"
 }
@@ -147,23 +145,11 @@ func displayName(n string) string {
 	return n
 }
 
-// valuesEqual 是 == 的语义。
+// valuesEqual 是 == 的语义，委托给 semantics.Equal。
 //
-// 字符串在这里只比较指针 —— 这是合法的，因为所有字符串都经过驻留（intern），
-// 内容相同的字符串一定是同一个对象。详见 vm.internString 的注释。
-// 如果哪天去掉了驻留，这一行就会变成「内容相同却判不相等」的隐蔽 bug，
-// 所以驻留不是性能优化，是 == 语义的前提。
+// 注意：toAny 把字符串对象转成 Go string 再比较内容，而不是比较指针。
+// 在驻留（intern）的前提下两者结果完全一致；即使哪天去掉驻留，
+// 内容比较仍能保持 == 语义正确，不会变成「内容相同却判不相等」的隐蔽 bug。
 func valuesEqual(a, b Value) bool {
-	if a.kind != b.kind {
-		return false
-	}
-	switch a.kind {
-	case KindNil:
-		return true
-	case KindBool, KindNumber:
-		return a.num == b.num
-	case KindObject:
-		return a.obj == b.obj
-	}
-	return false
+	return semantics.Equal(a.toAny(), b.toAny())
 }

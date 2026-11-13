@@ -292,14 +292,14 @@ func dumpExpr(b *strings.Builder, e Expr, depth int) {
 		fmt.Fprintf(b, "Assign(%s)\n", n.Name)
 		dumpExpr(b, n.Value, depth+1)
 	case *Unary:
-		fmt.Fprintf(b, "Unary(%s)\n", opText(n.Op))
+		fmt.Fprintf(b, "Unary(%s)\n", token.OpText(n.Op))
 		dumpExpr(b, n.Right, depth+1)
 	case *Binary:
-		fmt.Fprintf(b, "Binary(%s)\n", opText(n.Op))
+		fmt.Fprintf(b, "Binary(%s)\n", token.OpText(n.Op))
 		dumpExpr(b, n.Left, depth+1)
 		dumpExpr(b, n.Right, depth+1)
 	case *Logical:
-		fmt.Fprintf(b, "Logical(%s)\n", opText(n.Op))
+		fmt.Fprintf(b, "Logical(%s)\n", token.OpText(n.Op))
 		dumpExpr(b, n.Left, depth+1)
 		dumpExpr(b, n.Right, depth+1)
 	case *Grouping:
@@ -320,38 +320,4 @@ func dumpExpr(b *strings.Builder, e Expr, depth int) {
 	default:
 		fmt.Fprintf(b, "<unknown expr %T>\n", e)
 	}
-}
-
-func opText(t token.Type) string {
-	switch t {
-	case token.Plus:
-		return "+"
-	case token.Minus:
-		return "-"
-	case token.Star:
-		return "*"
-	case token.Slash:
-		return "/"
-	case token.Percent:
-		return "%"
-	case token.Bang:
-		return "!"
-	case token.Eq:
-		return "=="
-	case token.Ne:
-		return "!="
-	case token.Lt:
-		return "<"
-	case token.Le:
-		return "<="
-	case token.Gt:
-		return ">"
-	case token.Ge:
-		return ">="
-	case token.AndAnd:
-		return "&&"
-	case token.OrOr:
-		return "||"
-	}
-	return t.String()
 }
