@@ -5,7 +5,8 @@
 // 这里只留一份实现，tree 和 engine 只做薄适配：
 //   - tree 的值是 Go 的 any（nil/bool/float64/string/函数），直接调这里的函数；
 //   - engine 的值是带标签的 Value，先转成 any 再调这里的函数，
-//     字符串比较仍靠驻留后的指针相等，与原来完全一致。
+//     字符串比较按内容比较：engine 先把字符串对象转成 Go string 再调这里的函数，
+//     即使去掉驻留，== 语义仍正确；驻留只做去重，不参与相等判断。
 //
 // 本包是纯语义，不依赖 diag、ast、tree、engine，因此不会形成 import 环。
 package semantics
@@ -42,14 +43,19 @@ func Number(f float64) string {
 // HumanBytes 把字节数格式化成人类可读的字符串。
 // cmd/minilang 的 bench 输出与 tools/pack 的打包清单共用这一份实现。
 func HumanBytes(n uint64) string {
-	if n > 1<<20 {
+	if n >= 1<<20 {
 		return fmt.Sprintf("%.2f MiB", float64(n)/float64(1<<20))
 	}
-	if n > 1<<10 {
+	if n >= 1<<10 {
 		return fmt.Sprintf("%.2f KiB", float64(n)/float64(1<<10))
 	}
 	return fmt.Sprintf("%d B", n)
 }
+
+// MaxCallDepth 是双引擎共用的调用深度上限。
+// tree 侧以前是 1000、VM 侧是 1024，同一份深递归程序在 1001–1024 层时
+// 两个引擎行为不一致；统一为 1000 后，双引擎一致性承诺在边界处也成立。
+const MaxCallDepth = 1000
 
 // SignedBytes 处理「运行后比运行前更小」的情况。
 // 直接用 uint64 相减会下溢成 1.7e19，这个数会以「17592186044415 MiB」的形式

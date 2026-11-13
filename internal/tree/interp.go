@@ -11,11 +11,10 @@ import (
 	"github.com/OL486/minilang/internal/token"
 )
 
-// maxCallDepth 是调用深度上限。
+// 调用深度上限与 VM 侧共用 semantics.MaxCallDepth（见 B2 的说明）。
 // 不设上限时，一个写错的递归会让 Go 的栈一路长到 OOM 或者打出一屏
 // "stack overflow" 的 goroutine dump —— 那个 dump 里没有任何 minilang 的信息。
 // 自己设限，就能报出「第几行调用太深」，这才是有用的信息。
-const maxCallDepth = 1000
 
 // returnSignal 用 panic 实现 return 的非局部跳转。
 //
@@ -41,7 +40,7 @@ func New(out io.Writer) *Interp {
 	in := &Interp{
 		globals:  NewEnv(nil),
 		out:      out,
-		maxDepth: maxCallDepth,
+		maxDepth: semantics.MaxCallDepth,
 	}
 	in.globals.Define("clock", &NativeFn{
 		Name:  "clock",
@@ -336,5 +335,5 @@ func FormatValue(v any) string {
 	case *NativeFn:
 		return semantics.FormatFunc(x.Name, true)
 	}
-	return fmt.Sprintf("%v", v)
+	return "<unknown>"
 }
