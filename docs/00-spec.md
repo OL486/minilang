@@ -289,9 +289,20 @@ minilang/
 │   │   ├── value.go                Value 表示 + 相等语义 + 格式化
 │   │   ├── object.go               堆对象（string/function/closure/upvalue/native）
 │   │   ├── chunk.go                Op 定义 + Chunk + 反汇编（--dump-bytecode）
-│   │   ├── vm.go                   分派循环、调用帧、upvalue 捕获/关闭
+│   │   ├── vm.go                   VM 结构、创建、统计
+│   │   ├── run.go                  分派循环
+│   │   ├── stack.go                操作数栈
+│   │   ├── alloc.go                堆分配、字符串驻留、临时根
+│   │   ├── call.go                 函数调用与调用帧
+│   │   ├── upvalue.go              upvalue 捕获/关闭
+│   │   ├── arith.go                算术/比较/运算符映射
 │   │   └── gc.go                   标记-清除
-│   └── compiler/compiler.go        S6 AST → 字节码
+│   └── compiler/                   S6 AST → 字节码
+│       ├── compiler.go             入口 CompileProgram、函数状态
+│       ├── emit.go                 字节码发射原语与跳转回填
+│       ├── scope.go                作用域与变量解析
+│       ├── stmt.go                 语句编译
+│       └── expr.go                 表达式编译
 ├── test/e2e_test.go                双引擎一致性 + 错误信息 + GC 验收
 ├── examples/                       可运行示例（含 errors/ 子目录）
 └── docs/                           本目录

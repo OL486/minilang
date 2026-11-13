@@ -33,7 +33,7 @@
 `CompileProgram(a Allocator, stmts)`，`Compiler` 存 `alloc Allocator`；
 `*vm.VM` 完整实现该接口。
 
-- 改动面：编译器包内 2 个文件 + 测试；生产调用方（`cmd/minilang/session.go`、
+- 改动面：编译器包内 4 个文件（拆分后：`compiler.go` / `emit.go` / `stmt.go` / `expr.go`）+ 新文件 `alloc.go` + 测试；生产调用方（`cmd/minilang/session.go`、
   `test/e2e_test.go`）**一行不用改**（传 `*vm.VM` 照常编译）。
 - API 破坏：`CompileProgram` 参数类型由 `*vm.VM` 变为 `Allocator`，
   对调用方源码兼容（` *vm.VM` 满足接口）；语义上反而放宽了。

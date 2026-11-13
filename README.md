@@ -145,8 +145,8 @@ REPL 命令：`:help` `:quit` `:gc` `:stats`
 | S4 | 函数 / 调用帧 / 闭包 | `internal/treewalk/interp.go` | `makeCounter` 两个计数器互不干扰 |
 | S5 | 性能基线 | `cmd/minilang/main.go` (`bench`) | [`docs/03-benchmark.md`](docs/03-benchmark.md) |
 | S6 | 字节码编译器 + 反汇编 | `internal/compiler/` `internal/vm/chunk.go` | `--dump-bytecode` |
-| S7 | VM 执行循环 + 跳转 + 局部变量 | `internal/vm/vm.go` | while 循环结果与 S3 一致 |
-| S8 | VM 里的函数 / 帧 / upvalue | `internal/vm/vm.go` `object.go` | `makeCounter` 在 VM 上一致 |
+| S7 | VM 执行循环 + 跳转 + 局部变量 | `internal/vm/run.go` | while 循环结果与 S3 一致 |
+| S8 | VM 里的函数 / 帧 / upvalue | `internal/vm/call.go` `internal/vm/upvalue.go` `object.go` | `makeCounter` 在 VM 上一致 |
 | S9 | 标记-清除 GC | `internal/vm/gc.go` | `examples/05-gc-stress.ml --stats` |
 | S10 | 收尾对比 | [`docs/03-benchmark.md`](docs/03-benchmark.md) | 约 8× 加速 |
 
@@ -192,14 +192,14 @@ done
 
 这五处对应 [`docs/02-pitfalls.md`](docs/02-pitfalls.md) 里的五个陷阱，代码里都有长注释：
 
-1. **局部变量用绝对槽位，不用相对栈顶偏移** —— `compiler.go` 的 `resolveLocal`。
+1. **局部变量用绝对槽位，不用相对栈顶偏移** —— `scope.go` 的 `resolveLocal`。
    相对偏移在「赋值表达式的值被用到」时会写到隔壁变量上。
-2. **跳转回填的 `- 2`** —— `compiler.go` 的 `patchJump` / `emitLoop`。
+2. **跳转回填的 `- 2`** —— `emit.go` 的 `patchJump` / `emitLoop`。
    偏移相对操作数之后那个字节算，不是相对指令开头。
-3. **upvalue 的 open / close，链表按槽位降序** —— `vm.go` 的 `captureUpvalue` / `closeUpvalues`。
+3. **upvalue 的 open / close，链表按槽位降序** —— `upvalue.go` 的 `captureUpvalue` / `closeUpvalues`。
    降序是「扫到第一个越界就停」这个前提。
-4. **GC 的 5 类根，以及「先 GC 再挂链」的分配顺序** —— `gc.go` 的 `markRoots`、`vm.go` 的 `allocate`。
-5. **字符串驻留是 `==` 语义的前提，不是性能优化** —— `vm.go` 的 `InternString`、`value.go` 的 `valuesEqual`。
+4. **GC 的 5 类根，以及「先 GC 再挂链」的分配顺序** —— `gc.go` 的 `markRoots`、`alloc.go` 的 `allocate`。
+5. **字符串驻留是 `==` 语义的前提，不是性能优化** —— `alloc.go` 的 `InternString`、`value.go` 的 `valuesEqual`。
 
 ---
 
