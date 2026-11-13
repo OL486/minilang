@@ -228,7 +228,7 @@ C 版本的实现通常直接比较 `Location` 指针大小（`upvalue->location
 
 标记-清除最容易出的 bug 是「对象还在用却被回收了」。根集合漏一项就会偶发崩溃。
 
-### 本实现的 5 类根（`internal/engine/gc.go` 的 `markRoots`）
+### 本实现的 5 类根（`internal/vm/gc.go` 的 `markRoots`）
 
 | # | 根 | 为什么必须在这里 |
 |---|---|---|

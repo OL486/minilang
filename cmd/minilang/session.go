@@ -10,27 +10,27 @@ import (
 	"github.com/OL486/minilang/internal/ast"
 	"github.com/OL486/minilang/internal/compiler"
 	"github.com/OL486/minilang/internal/diag"
-	"github.com/OL486/minilang/internal/engine"
+	"github.com/OL486/minilang/internal/vm"
 	"github.com/OL486/minilang/internal/lexer"
 	"github.com/OL486/minilang/internal/parser"
 	"github.com/OL486/minilang/internal/token"
-	"github.com/OL486/minilang/internal/tree"
+	"github.com/OL486/minilang/internal/treewalk"
 )
 
 // session 持有跨行存活的状态：REPL 里 VM 和解释器必须复用，
 // 否则上一行 let 的全局变量下一行就看不见了。
 type session struct {
 	opt    options
-	vm     *engine.VM
-	interp *tree.Interp
+	vm     *vm.VM
+	interp *treewalk.Interp
 }
 
 func newSession(o options) *session {
 	s := &session{opt: o}
 	if o.engine == "tree" {
-		s.interp = tree.New(o.out)
+		s.interp = treewalk.New(o.out)
 	} else {
-		s.vm = engine.NewVM(o.out)
+		s.vm = vm.NewVM(o.out)
 		if o.gcOff {
 			s.vm.SetGCEnabled(false)
 		}
@@ -67,7 +67,7 @@ func (s *session) parseSource(src string, dumpTokens bool) ([]ast.Stmt, bool) {
 // compile 把语句编译成字节码函数（仅 VM 引擎）。
 // 反汇编在这里打印一次：runSource 和 bench 都走这里，不会重复。
 // src 只用来渲染错误时的源码片段。
-func (s *session) compile(stmts []ast.Stmt, name, src string) (*engine.ObjFunction, bool) {
+func (s *session) compile(stmts []ast.Stmt, name, src string) (*vm.ObjFunction, bool) {
 	fn, compErrs := compiler.CompileProgram(s.vm, stmts)
 	if len(compErrs) > 0 {
 		fmt.Fprintln(s.opt.errOut, diag.RenderAll(src, compErrs))
@@ -85,7 +85,7 @@ func (s *session) runTree(stmts []ast.Stmt) error {
 }
 
 // runCompiled 执行一个已编译好的脚本函数（仅 VM 引擎）。
-func (s *session) runCompiled(fn *engine.ObjFunction) (engine.Value, error) {
+func (s *session) runCompiled(fn *vm.ObjFunction) (vm.Value, error) {
 	return s.vm.RunScript(fn)
 }
 
@@ -159,7 +159,7 @@ func printTokens(w io.Writer, tokens []token.Token) {
 	}
 }
 
-func printStats(w io.Writer, vm *engine.VM) {
+func printStats(w io.Writer, vm *vm.VM) {
 	st := vm.Stats()
 	fmt.Fprintf(w, "-- stats: 存活对象 %d, 堆 %d B, GC 次数 %d, 累计创建对象 %d\n",
 		st.Objects, st.Bytes, st.GCRuns, st.ObjectsTotal)

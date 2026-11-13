@@ -13,7 +13,7 @@ package compiler
 import (
 	"github.com/OL486/minilang/internal/ast"
 	"github.com/OL486/minilang/internal/diag"
-	"github.com/OL486/minilang/internal/engine"
+	"github.com/OL486/minilang/internal/vm"
 	"github.com/OL486/minilang/internal/token"
 )
 
@@ -41,7 +41,7 @@ type upvalueDesc struct {
 // fnState 是一个函数（或脚本）的编译状态。
 type fnState struct {
 	enclosing  *fnState
-	fn         *engine.ObjFunction
+	fn         *vm.ObjFunction
 	locals     []local
 	upvalues   []upvalueDesc
 	scopeDepth int
@@ -49,7 +49,7 @@ type fnState struct {
 
 // Compiler 是字节码编译器。
 type Compiler struct {
-	vm   *engine.VM
+	vm   *vm.VM
 	fn   *fnState
 	errs []*diag.Error
 }
@@ -60,8 +60,8 @@ type Compiler struct {
 type compileAbort struct{}
 
 // CompileProgram 编译整个程序，返回脚本函数。
-func CompileProgram(vm *engine.VM, stmts []ast.Stmt) (fn *engine.ObjFunction, errs []*diag.Error) {
-	c := &Compiler{vm: vm}
+func CompileProgram(v *vm.VM, stmts []ast.Stmt) (fn *vm.ObjFunction, errs []*diag.Error) {
+	c := &Compiler{vm: v}
 	defer func() {
 		if r := recover(); r != nil {
 			if _, ok := r.(compileAbort); !ok {
@@ -69,13 +69,13 @@ func CompileProgram(vm *engine.VM, stmts []ast.Stmt) (fn *engine.ObjFunction, er
 			}
 			fn = nil
 			errs = c.errs
-			vm.ClearRoots()
+			v.ClearRoots()
 		}
 	}()
 
-	script := vm.NewFunction("", 0)
+	script := v.NewFunction("", 0)
 	// 立刻上根：编译过程中会创建大量字符串常量，随时可能触发 GC。
-	vm.PushRoot(engine.ObjValue(script))
+	v.PushRoot(vm.ObjValue(script))
 	// 槽位 0 固定给脚本闭包自身。运行期 slotBase 指向它，
 	// 所以脚本的局部变量从槽位 1 开始 —— 与函数完全一致，不需要特例。
 	c.fn = &fnState{fn: script, locals: []local{{name: "", depth: 0}}}
@@ -83,10 +83,10 @@ func CompileProgram(vm *engine.VM, stmts []ast.Stmt) (fn *engine.ObjFunction, er
 		c.stmt(s)
 	}
 	c.emitReturn(lastLine(stmts))
-	vm.PopRoot()
+	v.PopRoot()
 
 	if len(c.errs) > 0 {
-		vm.ClearRoots()
+		v.ClearRoots()
 		return nil, c.errs
 	}
 	return script, nil
@@ -94,9 +94,9 @@ func CompileProgram(vm *engine.VM, stmts []ast.Stmt) (fn *engine.ObjFunction, er
 
 // ---------- 发射原语 ----------
 
-func (c *Compiler) chunk() *engine.Chunk { return c.fn.fn.Chunk }
+func (c *Compiler) chunk() *vm.Chunk { return c.fn.fn.Chunk }
 
-func (c *Compiler) emit(op engine.Op, line int) {
+func (c *Compiler) emit(op vm.Op, line int) {
 	c.chunk().Write(byte(op), line)
 }
 
@@ -114,7 +114,7 @@ func (c *Compiler) errorAt(line int, format string, args ...any) {
 	panic(compileAbort{})
 }
 
-func (c *Compiler) addConstant(v engine.Value, line int) int {
+func (c *Compiler) addConstant(v vm.Value, line int) int {
 	idx := c.chunk().AddConstant(v)
 	if idx < 0 {
 		c.errorAt(line, "函数 %s 的常量池超过 %d 项（单字节操作数上限）", displayFnName(c.fn.fn.Name), maxConstants)
@@ -141,7 +141,7 @@ func displayFnName(n string) string {
 
 func (c *Compiler) identifierConstant(name string, line int) int {
 	s := c.vm.InternString(name)
-	return c.addConstant(engine.ObjValue(s), line)
+	return c.addConstant(vm.ObjValue(s), line)
 }
 
 // emitJump 发射一个 16 位占位跳转，返回操作数位置。
@@ -149,7 +149,7 @@ func (c *Compiler) identifierConstant(name string, line int) int {
 // 为什么必须先发 0xff 0xff 再回填：编译到 if/while 时，跳转目标还不存在。
 // 只有等分支体编译完，才知道目标偏移。回填（patch）是这个模式的名字。
 // 另一种写法是「先记录位置，最后统一重排」—— 那需要两遍编译，得不偿失。
-func (c *Compiler) emitJump(op engine.Op, line int) int {
+func (c *Compiler) emitJump(op vm.Op, line int) int {
 	c.emit(op, line)
 	c.emitByte(0xff, line)
 	c.emitByte(0xff, line)
@@ -171,7 +171,7 @@ func (c *Compiler) patchJump(offset int) {
 }
 
 func (c *Compiler) emitLoop(loopStart, line int) {
-	c.emit(engine.OpLoop, line)
+	c.emit(vm.OpLoop, line)
 	// +2 是操作数自身的长度：VM 在读完操作数后 ip 已经指向下一条指令，
 	// 要减掉「opcode + 2 字节操作数」才能回到循环开头。
 	offset := len(c.chunk().Code) - loopStart + 2
@@ -182,8 +182,8 @@ func (c *Compiler) emitLoop(loopStart, line int) {
 }
 
 func (c *Compiler) emitReturn(line int) {
-	c.emit(engine.OpNil, line)
-	c.emit(engine.OpReturn, line)
+	c.emit(vm.OpNil, line)
+	c.emit(vm.OpReturn, line)
 }
 
 // ---------- 作用域 ----------
@@ -196,9 +196,9 @@ func (c *Compiler) endScope(line int) {
 		if c.fn.locals[len(c.fn.locals)-1].captured {
 			// 被闭包捕获过的局部变量不能简单 POP：必须先把值搬到堆上，
 			// 否则栈槽被后续代码复用时，闭包看到的就是别人的值。
-			c.emit(engine.OpCloseUpvalue, line)
+			c.emit(vm.OpCloseUpvalue, line)
 		} else {
-			c.emit(engine.OpPop, line)
+			c.emit(vm.OpPop, line)
 		}
 		c.fn.locals = c.fn.locals[:len(c.fn.locals)-1]
 	}
@@ -280,7 +280,7 @@ func (c *Compiler) stmt(s ast.Stmt) {
 			// 这样 REPL 里连续输入的两行才能互相看见 —— 每行是独立编译的脚本函数，
 			// 局部槽位在脚本结束后就没了。
 			idx := c.identifierConstant(n.Name, n.P.Line)
-			c.emit(engine.OpDefineGlobal, n.P.Line)
+			c.emit(vm.OpDefineGlobal, n.P.Line)
 			c.emitByte(byte(idx), n.P.Line)
 		} else {
 			// 局部变量：初始化表达式的值已经在栈顶，那个位置就是它的槽位。
@@ -293,11 +293,11 @@ func (c *Compiler) stmt(s ast.Stmt) {
 
 	case *ast.PrintStmt:
 		c.expr(n.Value)
-		c.emit(engine.OpPrint, n.P.Line)
+		c.emit(vm.OpPrint, n.P.Line)
 
 	case *ast.ExprStmt:
 		c.expr(n.X)
-		c.emit(engine.OpPop, n.P.Line)
+		c.emit(vm.OpPop, n.P.Line)
 
 	case *ast.BlockStmt:
 		c.beginScope()
@@ -314,11 +314,11 @@ func (c *Compiler) stmt(s ast.Stmt) {
 
 	case *ast.ReturnStmt:
 		if n.Value == nil {
-			c.emit(engine.OpNil, n.P.Line)
+			c.emit(vm.OpNil, n.P.Line)
 		} else {
 			c.expr(n.Value)
 		}
-		c.emit(engine.OpReturn, n.P.Line)
+		c.emit(vm.OpReturn, n.P.Line)
 
 	default:
 		c.errorAt(s.Pos().Line, "内部错误：未知语句类型 %T", s)
@@ -328,22 +328,22 @@ func (c *Compiler) stmt(s ast.Stmt) {
 func (c *Compiler) ifStmt(n *ast.IfStmt) {
 	line := n.P.Line
 	c.expr(n.Cond)
-	thenJump := c.emitJump(engine.OpJumpIfFalse, line)
+	thenJump := c.emitJump(vm.OpJumpIfFalse, line)
 
 	// 条件值还在栈上，then 分支进来第一件事就是把它弹掉。
 	// OP_JUMP_IF_FALSE 故意不弹栈：它既要「保留条件值给 then 用」，
 	// 又要「跳到 else 时让 else 去弹」—— 两边各弹一次，指令数最少。
-	c.emit(engine.OpPop, line)
+	c.emit(vm.OpPop, line)
 	c.beginScope()
 	for _, st := range n.Then {
 		c.stmt(st)
 	}
 	c.endScope(line)
 
-	elseJump := c.emitJump(engine.OpJump, line)
+	elseJump := c.emitJump(vm.OpJump, line)
 	c.patchJump(thenJump)
 
-	c.emit(engine.OpPop, line)
+	c.emit(vm.OpPop, line)
 	if len(n.Else) > 0 {
 		c.beginScope()
 		for _, st := range n.Else {
@@ -359,8 +359,8 @@ func (c *Compiler) whileStmt(n *ast.WhileStmt) {
 	loopStart := len(c.chunk().Code)
 
 	c.expr(n.Cond)
-	exitJump := c.emitJump(engine.OpJumpIfFalse, line)
-	c.emit(engine.OpPop, line)
+	exitJump := c.emitJump(vm.OpJumpIfFalse, line)
+	c.emit(vm.OpPop, line)
 
 	c.beginScope()
 	for _, st := range n.Body {
@@ -370,7 +370,7 @@ func (c *Compiler) whileStmt(n *ast.WhileStmt) {
 
 	c.emitLoop(loopStart, line)
 	c.patchJump(exitJump)
-	c.emit(engine.OpPop, line) // 条件为假时把条件值弹掉
+	c.emit(vm.OpPop, line) // 条件为假时把条件值弹掉
 }
 
 func (c *Compiler) fnDecl(n *ast.FnDecl) {
@@ -385,10 +385,10 @@ func (c *Compiler) fnDecl(n *ast.FnDecl) {
 
 	// 常量必须在 PopRoot 之前加进去：compileFunction 已经把 fn 挂到根上，
 	// 此刻把 fn 放进当前函数的常量池，之后就由常量池（间接由当前函数）保活。
-	idx := c.addConstant(engine.ObjValue(fn), n.P.Line)
+	idx := c.addConstant(vm.ObjValue(fn), n.P.Line)
 	c.vm.PopRoot()
 
-	c.emit(engine.OpClosure, n.P.Line)
+	c.emit(vm.OpClosure, n.P.Line)
 	c.emitByte(byte(idx), n.P.Line)
 	for _, uv := range upvals {
 		if uv.isLocal {
@@ -401,7 +401,7 @@ func (c *Compiler) fnDecl(n *ast.FnDecl) {
 
 	if !isLocal {
 		nameIdx := c.identifierConstant(n.Name, n.P.Line)
-		c.emit(engine.OpDefineGlobal, n.P.Line)
+		c.emit(vm.OpDefineGlobal, n.P.Line)
 		c.emitByte(byte(nameIdx), n.P.Line)
 	}
 	// 局部函数不需要额外指令：OP_CLOSURE 已经把闭包压在预留的槽位上。
@@ -411,9 +411,9 @@ func (c *Compiler) fnDecl(n *ast.FnDecl) {
 //
 // 约定：本函数把 fn 压入临时根栈，由调用方负责 PopRoot。
 // 这样「编译完 → 放进常量池」之间不会被 GC 打断。
-func (c *Compiler) compileFunction(n *ast.FnDecl) (*engine.ObjFunction, []upvalueDesc) {
+func (c *Compiler) compileFunction(n *ast.FnDecl) (*vm.ObjFunction, []upvalueDesc) {
 	fn := c.vm.NewFunction(n.Name, len(n.Params))
-	c.vm.PushRoot(engine.ObjValue(fn))
+	c.vm.PushRoot(vm.ObjValue(fn))
 
 	outer := c.fn
 	inner := &fnState{
@@ -445,33 +445,33 @@ func (c *Compiler) expr(e ast.Expr) {
 
 	case *ast.Variable:
 		if slot := c.resolveLocal(c.fn, n.Name); slot >= 0 {
-			c.emit(engine.OpGetLocal, n.P.Line)
+			c.emit(vm.OpGetLocal, n.P.Line)
 			c.emitByte(byte(slot), n.P.Line)
 			return
 		}
 		if uv := c.resolveUpvalue(c.fn, n.Name); uv >= 0 {
-			c.emit(engine.OpGetUpvalue, n.P.Line)
+			c.emit(vm.OpGetUpvalue, n.P.Line)
 			c.emitByte(byte(uv), n.P.Line)
 			return
 		}
 		idx := c.identifierConstant(n.Name, n.P.Line)
-		c.emit(engine.OpGetGlobal, n.P.Line)
+		c.emit(vm.OpGetGlobal, n.P.Line)
 		c.emitByte(byte(idx), n.P.Line)
 
 	case *ast.Assign:
 		c.expr(n.Value)
 		if slot := c.resolveLocal(c.fn, n.Name); slot >= 0 {
-			c.emit(engine.OpSetLocal, n.P.Line)
+			c.emit(vm.OpSetLocal, n.P.Line)
 			c.emitByte(byte(slot), n.P.Line)
 			return
 		}
 		if uv := c.resolveUpvalue(c.fn, n.Name); uv >= 0 {
-			c.emit(engine.OpSetUpvalue, n.P.Line)
+			c.emit(vm.OpSetUpvalue, n.P.Line)
 			c.emitByte(byte(uv), n.P.Line)
 			return
 		}
 		idx := c.identifierConstant(n.Name, n.P.Line)
-		c.emit(engine.OpSetGlobal, n.P.Line)
+		c.emit(vm.OpSetGlobal, n.P.Line)
 		c.emitByte(byte(idx), n.P.Line)
 
 	case *ast.Grouping:
@@ -481,9 +481,9 @@ func (c *Compiler) expr(e ast.Expr) {
 		c.expr(n.Right)
 		switch n.Op {
 		case token.Bang:
-			c.emit(engine.OpNot, n.P.Line)
+			c.emit(vm.OpNot, n.P.Line)
 		case token.Minus:
-			c.emit(engine.OpNegate, n.P.Line)
+			c.emit(vm.OpNegate, n.P.Line)
 		}
 
 	case *ast.Binary:
@@ -492,30 +492,30 @@ func (c *Compiler) expr(e ast.Expr) {
 		line := n.P.Line
 		switch n.Op {
 		case token.Plus:
-			c.emit(engine.OpAdd, line)
+			c.emit(vm.OpAdd, line)
 		case token.Minus:
-			c.emit(engine.OpSubtract, line)
+			c.emit(vm.OpSubtract, line)
 		case token.Star:
-			c.emit(engine.OpMultiply, line)
+			c.emit(vm.OpMultiply, line)
 		case token.Slash:
-			c.emit(engine.OpDivide, line)
+			c.emit(vm.OpDivide, line)
 		case token.Percent:
-			c.emit(engine.OpModulo, line)
+			c.emit(vm.OpModulo, line)
 		case token.Eq:
-			c.emit(engine.OpEqual, line)
+			c.emit(vm.OpEqual, line)
 		case token.Ne:
 			// 没有 OP_NOT_EQUAL：复用 OP_EQUAL + OP_NOT。
 			// 多一个 opcode 就要多一条分派分支，而「取反」本身已经存在。
-			c.emit(engine.OpEqual, line)
-			c.emit(engine.OpNot, line)
+			c.emit(vm.OpEqual, line)
+			c.emit(vm.OpNot, line)
 		case token.Gt:
-			c.emit(engine.OpGreater, line)
+			c.emit(vm.OpGreater, line)
 		case token.Ge:
-			c.emit(engine.OpGreaterEqual, line)
+			c.emit(vm.OpGreaterEqual, line)
 		case token.Lt:
-			c.emit(engine.OpLess, line)
+			c.emit(vm.OpLess, line)
 		case token.Le:
-			c.emit(engine.OpLessEqual, line)
+			c.emit(vm.OpLessEqual, line)
 		}
 
 	case *ast.Logical:
@@ -529,7 +529,7 @@ func (c *Compiler) expr(e ast.Expr) {
 		if len(n.Args) > 255 {
 			c.errorAt(n.P.Line, "调用实参超过 255 个")
 		}
-		c.emit(engine.OpCall, n.P.Line)
+		c.emit(vm.OpCall, n.P.Line)
 		c.emitByte(byte(len(n.Args)), n.P.Line)
 
 	default:
@@ -540,23 +540,23 @@ func (c *Compiler) expr(e ast.Expr) {
 func (c *Compiler) literal(n *ast.Literal) {
 	switch v := n.Value.(type) {
 	case nil:
-		c.emit(engine.OpNil, n.P.Line)
+		c.emit(vm.OpNil, n.P.Line)
 	case bool:
 		if v {
-			c.emit(engine.OpTrue, n.P.Line)
+			c.emit(vm.OpTrue, n.P.Line)
 		} else {
-			c.emit(engine.OpFalse, n.P.Line)
+			c.emit(vm.OpFalse, n.P.Line)
 		}
 	case float64:
-		idx := c.addConstant(engine.NumberValue(v), n.P.Line)
-		c.emit(engine.OpConstant, n.P.Line)
+		idx := c.addConstant(vm.NumberValue(v), n.P.Line)
+		c.emit(vm.OpConstant, n.P.Line)
 		c.emitByte(byte(idx), n.P.Line)
 	case string:
 		// 字符串常量也走驻留表：同一内容复用同一对象，省内存。
-		// == 本身按内容比较（见 engine.valuesEqual），不依赖指针相等。
+		// == 本身按内容比较（见 vm.valuesEqual），不依赖指针相等。
 		s := c.vm.InternString(v)
-		idx := c.addConstant(engine.ObjValue(s), n.P.Line)
-		c.emit(engine.OpConstant, n.P.Line)
+		idx := c.addConstant(vm.ObjValue(s), n.P.Line)
+		c.emit(vm.OpConstant, n.P.Line)
 		c.emitByte(byte(idx), n.P.Line)
 	default:
 		c.errorAt(n.P.Line, "内部错误：未知字面量类型 %T", n.Value)
@@ -580,17 +580,17 @@ func (c *Compiler) logical(n *ast.Logical) {
 	c.expr(n.Left)
 
 	if n.Op == token.AndAnd {
-		endJump := c.emitJump(engine.OpJumpIfFalse, line)
-		c.emit(engine.OpPop, line)
+		endJump := c.emitJump(vm.OpJumpIfFalse, line)
+		c.emit(vm.OpPop, line)
 		c.expr(n.Right)
 		c.patchJump(endJump)
 		return
 	}
 
-	elseJump := c.emitJump(engine.OpJumpIfFalse, line)
-	endJump := c.emitJump(engine.OpJump, line)
+	elseJump := c.emitJump(vm.OpJumpIfFalse, line)
+	endJump := c.emitJump(vm.OpJump, line)
 	c.patchJump(elseJump)
-	c.emit(engine.OpPop, line)
+	c.emit(vm.OpPop, line)
 	c.expr(n.Right)
 	c.patchJump(endJump)
 }

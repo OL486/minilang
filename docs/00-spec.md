@@ -256,7 +256,7 @@ false && f()     // => false，f() 不会被调用
 | 词法 | `词法错误` | `internal/lexer` | 是 | 字符串未闭合、非法字符、数字里有两个小数点 |
 | 语法 | `语法错误` | `internal/parser` | 是 | 缺分号、缺右括号、表达式开头非法 |
 | 编译 | `编译错误` | `internal/compiler` | 否 | 重复声明、常量池溢出 |
-| 运行时 | `运行时错误` | `engine` / `tree` | VM 无、tree 有 | 类型不匹配、未定义变量、栈溢出 |
+| 运行时 | `运行时错误` | `vm` / `tree` | VM 无、tree 有 | 类型不匹配、未定义变量、栈溢出 |
 
 为什么字节码 VM 的运行时错误没有列号：`Chunk.Lines` 是「每字节一个行号」，
 只记录行不记录列。要支持列号就得把 `Lines` 换成 `[]struct{line,col}`，
@@ -282,10 +282,10 @@ minilang/
 │   ├── lexer/lexer.go              S1 扫描器
 │   ├── ast/ast.go                  S2 语法树 + 树形打印（--dump-ast）
 │   ├── parser/parser.go            S2 递归下降 + Pratt
-│   ├── tree/                        S3–S4 tree-walking 解释器
+│   ├── treewalk/                        S3–S4 tree-walking 解释器
 │   │   ├── env.go                  环境链
 │   │   └── interp.go               求值器
-│   ├── engine/                      S6–S9 字节码运行时
+│   ├── vm/                      S6–S9 字节码运行时
 │   │   ├── value.go                Value 表示 + 相等语义 + 格式化
 │   │   ├── object.go               堆对象（string/function/closure/upvalue/native）
 │   │   ├── chunk.go                Op 定义 + Chunk + 反汇编（--dump-bytecode）
