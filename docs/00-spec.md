@@ -273,7 +273,7 @@ false && f()     // => false，f() 不会被调用
 
 ```
 minilang/
-├── go.mod                          module minilang（零外部依赖）
+├── go.mod                          module github.com/OL486/minilang（零外部依赖）
 ├── cmd/minilang/main.go            CLI：run / repl / bench，三个 dump 开关
 ├── internal/
 │   ├── token/token.go              Token 类型与关键字表
