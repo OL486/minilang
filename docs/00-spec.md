@@ -278,7 +278,7 @@ minilang/
 ├── internal/
 │   ├── token/token.go              Token 类型与关键字表
 │   ├── diag/diag.go                带位置的诊断 + 源码片段渲染
-│   ├── numfmt/numfmt.go            数字格式化（两个引擎共用，保证输出一致）
+│   ├── semantics/semantics.go      共享语义：真值/类型名/相等/数字与字节格式化（两个引擎共用，保证输出一致）
 │   ├── lexer/lexer.go              S1 扫描器
 │   ├── ast/ast.go                  S2 语法树 + 树形打印（--dump-ast）
 │   ├── parser/parser.go            S2 递归下降 + Pratt
