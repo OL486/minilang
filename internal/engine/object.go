@@ -61,7 +61,6 @@ type Object interface {
 type ObjString struct {
 	objHeader
 	Chars string
-	Hash  uint32
 }
 
 func (s *ObjString) header() *objHeader {
@@ -143,18 +142,4 @@ func (n *ObjNative) header() *objHeader {
 		return nil
 	}
 	return &n.objHeader
-}
-
-// hashString 是 FNV-1a。用于驻留表的桶下标。
-func hashString(s string) uint32 {
-	const (
-		offset = 2166136261
-		prime  = 16777619
-	)
-	h := uint32(offset)
-	for i := 0; i < len(s); i++ {
-		h ^= uint32(s[i])
-		h *= prime
-	}
-	return h
 }
