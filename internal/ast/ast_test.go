@@ -53,3 +53,21 @@ func TestDump(t *testing.T) {
 		t.Errorf("Dump(nil) = %q, want empty", got)
 	}
 }
+
+func TestDumpTruncatesDeepNesting(t *testing.T) {
+	// 手写 1500 层 Grouping 嵌套：Dump 应截断而不是递归耗尽栈。
+	var e ast.Expr = &ast.Literal{P: ast.Pos{Line: 1, Col: 1}, Value: float64(1)}
+	for i := 0; i < 1500; i++ {
+		e = &ast.Grouping{P: ast.Pos{Line: 1, Col: 1}, Inner: e}
+	}
+	out := ast.Dump([]ast.Stmt{&ast.PrintStmt{P: ast.Pos{Line: 1, Col: 1}, Value: e}})
+	if !strings.Contains(out, "截断") {
+		t.Errorf("Dump 深嵌套 AST 应截断，输出不含「截断」：\n%s", out)
+	}
+	// 浅嵌套不受影响。
+	shallow := &ast.Grouping{P: ast.Pos{Line: 1, Col: 1}, Inner: &ast.Literal{P: ast.Pos{Line: 1, Col: 1}, Value: float64(1)}}
+	out = ast.Dump([]ast.Stmt{&ast.PrintStmt{P: ast.Pos{Line: 1, Col: 1}, Value: shallow}})
+	if !strings.Contains(out, "Group") || strings.Contains(out, "截断") {
+		t.Errorf("Dump 浅嵌套不应截断，得到：\n%s", out)
+	}
+}
