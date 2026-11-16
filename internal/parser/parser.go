@@ -349,6 +349,13 @@ func (p *Parser) parsePrecedence(min int) ast.Expr {
 }
 
 func (p *Parser) parsePrefix() ast.Expr {
+	// 到文件尾时 advance() 不再前进（返回上一个 token），
+	// 不加这个 guard 的话，`!`、`-` 这类一元运算符缺操作数时
+	// 会在这里无限递归直至栈溢出（fuzz 发现：输入只有 `!`）。
+	// 有 guard 时报一个干净的语法错误，由上层的 safeStatement 接住。
+	if p.atEnd() {
+		p.failHere("表达式不完整，文件已结束")
+	}
 	t := p.advance()
 	switch t.Type {
 	case token.Number, token.String:

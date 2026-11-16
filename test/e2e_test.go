@@ -253,6 +253,10 @@ func TestErrors(t *testing.T) {
 		{"非法字符", "let x = 1 $ 2;\n", "无法识别的字符"},
 		{"if 缺括号", "if true { print 1; }\n", "括号"},
 		{"重复声明", "fn f() { let a = 1; let a = 2; }\n", "重复声明"},
+		// 一元运算符在文件尾缺操作数：以前会在 parsePrefix 里无限递归
+		// 直至栈溢出（fuzz 输入 `!` 发现），现在应报干净的语法错误。
+		{"表达式在文件尾截断", "!", "表达式不完整"},
+		{"print 后缺表达式", "print", "表达式不完整"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
