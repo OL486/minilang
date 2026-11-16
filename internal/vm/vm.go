@@ -15,7 +15,7 @@ const (
 	StackMax = 1024 * 32
 
 	// FramesMax 是调用帧上限，防止无限递归把 Go 的栈打爆。
-	// 与 tree 侧共用 semantics.MaxCallDepth：以前 VM 是 1024、tree 是 1000，
+	// 与 treewalk 侧共用 semantics.MaxCallDepth：以前 VM 是 1024、treewalk 是 1000，
 	// 同一份深递归在 1001–1024 层时两个引擎行为不一致。
 	FramesMax = semantics.MaxCallDepth
 )
