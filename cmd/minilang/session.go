@@ -244,3 +244,29 @@ func checkFile(path string, o options) int {
 	fmt.Fprintf(o.out, "%s: OK\n", path)
 	return 0
 }
+
+// fmtFile 按规范格式打印源码到 stdout，不改原文件、不执行代码。
+//
+// 只做词法 + 语法（S1–S2），不编译：格式化的对象是「能解析的源码」
+// 而不是「能编译的程序」，重复声明这类编译错误不影响打印。
+// 输入走 readSource：与 run 一致的 10 MiB 上限，`-` 从 stdin 读。
+// --dump-* 开关在这里强制关闭，否则它们的输出会混进 stdout、
+// 污染格式化结果（fmt 的 stdout 就是交付物）。
+func fmtFile(path string, o options) int {
+	data, err := readSource(path, o.stdin)
+	if err != nil {
+		fmt.Fprintf(o.errOut, "无法读取文件 %s: %v\n", path, err)
+		return 1
+	}
+	o.dumpTokens = false
+	o.dumpAST = false
+	o.dumpBytecode = false
+	o.trace = false
+	s := newSession(o)
+	stmts, ok := s.parseSource(string(data), false)
+	if !ok {
+		return 1
+	}
+	fmt.Fprint(o.out, ast.Format(stmts))
+	return 0
+}

@@ -113,6 +113,10 @@ minilang examples/01-basics.ml              # run 可以省略
 # 只检查不执行（词法 + 语法 + 编译，恒走 VM 编译，与 --engine 无关）
 minilang check examples/01-basics.ml
 
+# 按规范格式打印源码（只读不写：输出到 stdout，不改原文件；注释会丢失）
+minilang fmt examples/01-basics.ml
+minilang fmt examples/01-basics.ml > /tmp/pretty.ml   # 想落盘自己重定向
+
 # 交互式
 minilang repl
 
