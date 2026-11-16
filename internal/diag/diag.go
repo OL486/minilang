@@ -47,6 +47,56 @@ func New(stage Stage, line, col int, format string, args ...any) *Error {
 	return &Error{Stage: stage, Line: line, Col: col, Msg: fmt.Sprintf(format, args...)}
 }
 
+// maxLineWidth 是渲染时单行源码最多显示的字符数（rune）。
+// 超过这个长度的行只显示以错误列为中心的窗口，两侧省略处用 … 标示。
+// 没有它，2M 字符的单行输入会让一次报错输出达到 MB 级（终端刷屏、日志爆炸）。
+const maxLineWidth = 80
+
+// truncateLine 把超长行截断为以错误列为中心的窗口。
+//
+// 返回显示文本与错误列在显示文本中的 rune 下标（从 0 开始），
+// 调用方据此重算 ^ 的位置。行不超长时原样返回，下标为 col-1。
+// col <= 0（只知道行、不知道列）时按行首处理：取行首窗口。
+func truncateLine(text string, col int) (string, int) {
+	runes := []rune(text)
+	if len(runes) <= maxLineWidth {
+		return text, col - 1
+	}
+	// 错误列的 rune 下标（从 0 开始），列号非法时夹到行内。
+	errIdx := col - 1
+	if errIdx < 0 {
+		errIdx = 0
+	}
+	if errIdx >= len(runes) {
+		errIdx = len(runes) - 1
+	}
+	// 窗口以错误列为中心；贴边时窗口顺势滑到行首或行尾，保证总显示 maxLineWidth 个字符。
+	half := maxLineWidth / 2
+	start := errIdx - half
+	if start < 0 {
+		start = 0
+	}
+	end := start + maxLineWidth
+	if end > len(runes) {
+		end = len(runes)
+		start = end - maxLineWidth
+	}
+	var b strings.Builder
+	if start > 0 {
+		b.WriteRune('…')
+	}
+	b.WriteString(string(runes[start:end]))
+	if end < len(runes) {
+		b.WriteRune('…')
+	}
+	// 错误列在显示文本中的 rune 下标：窗口内偏移 + 左侧省略号占 1 位。
+	offset := errIdx - start
+	if start > 0 {
+		offset++
+	}
+	return b.String(), offset
+}
+
 // Render 把诊断渲染成「报错 + 源码片段 + ^ 指针」的块。
 //
 // 这是本项目「不是玩具」的分界线：没有源码片段的报错，
@@ -61,7 +111,9 @@ func Render(src string, e *Error) string {
 	if e.Line > len(lines) {
 		return b.String()
 	}
-	text := lines[e.Line-1]
+	// 超长行先截断再显示，否则一次报错能输出 MB 级文本；
+	// caret 是截断后错误列在显示文本中的 rune 下标。
+	text, caret := truncateLine(lines[e.Line-1], e.Col)
 	// 行号右对齐到 4 位，方便多行报错时竖着看。
 	b.WriteString("\n")
 	b.WriteString(fmt.Sprintf("%4d | %s\n", e.Line, text))
@@ -71,9 +123,11 @@ func Render(src string, e *Error) string {
 		return strings.TrimRight(b.String(), "\n")
 	}
 	// 制表符在终端里占的宽度不固定，这里统一按 4 空格算，保证 ^ 大致落在正确列。
+	// 按 rune 计数：列号本身就是按字符算的（lexer 用 []rune 扫描），
+	// 按 byte 数会在多字节字符前把 ^ 画偏。
 	pad := 0
-	for i, r := range text {
-		if i+1 >= e.Col {
+	for n, r := range []rune(text) {
+		if n >= caret {
 			break
 		}
 		if r == '\t' {
