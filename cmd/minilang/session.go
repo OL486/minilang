@@ -175,8 +175,9 @@ func printStats(w io.Writer, vm *vm.VM) {
 
 // ---------- 文件执行 ----------
 
-// maxSourceBytes 是单个源码的上限：runFile 读文件、run - 读 stdin 都受它约束，
-// 避免一个超大输入被整块读进内存。超限时 readSource 报干净错误，不执行。
+// maxSourceBytes 是单个源码的上限：runFile、checkFile、REPL :load 读文件、
+// run - / check - 读 stdin 都受它约束，避免一个超大输入被整块读进内存。
+// 超限时 readSource 报干净错误，不执行。
 const maxSourceBytes = 10 * 1024 * 1024
 
 // readSource 读一段源码。path 为 "-" 时从 stdin 读（`minilang run -`）。
@@ -223,10 +224,16 @@ func runFile(path string, o options) int {
 // 能抓到 treewalk 要到运行时才暴露、甚至不暴露的问题。
 // 因此 --engine 对 check 不适用：无论传 vm 还是 tree，check 都一样。
 func checkFile(path string, o options) int {
-	data, err := os.ReadFile(path)
+	// 读源码走 readSource：与 runFile 同一条 10 MiB 上限，
+	// 且 "-" 从 stdin 读（与 `minilang run -` 一致）。
+	data, err := readSource(path, o.stdin)
 	if err != nil {
 		fmt.Fprintf(o.errOut, "无法读取文件 %s: %v\n", path, err)
 		return 1
+	}
+	name := filepath.Base(path)
+	if path == "-" {
+		name = "<stdin>"
 	}
 	o.engine = "vm" // check 恒用 VM 编译器（见上）；newSession 据此建 VM
 	s := newSession(o)
@@ -238,7 +245,7 @@ func checkFile(path string, o options) int {
 		fmt.Fprintf(o.out, "%s: OK\n", path)
 		return 0
 	}
-	if _, ok := s.compile(stmts, filepath.Base(path), string(data)); !ok {
+	if _, ok := s.compile(stmts, name, string(data)); !ok {
 		return 1
 	}
 	fmt.Fprintf(o.out, "%s: OK\n", path)

@@ -7,6 +7,7 @@ package main
 
 import (
 	"bytes"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -43,6 +44,40 @@ func TestCheckEmptyFile(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), ": OK") {
 		t.Fatalf("空程序通过时也应打印通过信息，实际 stdout: %q", out.String())
+	}
+}
+
+func TestCheckTooLarge(t *testing.T) {
+	// 与 runFile 同一条 10 MiB 上限：超限文件 check 应退出 1，不检查也不执行。
+	dir := t.TempDir()
+	path := filepath.Join(dir, "big.ml")
+	if err := os.WriteFile(path, []byte(strings.Repeat(" ", maxSourceBytes+1)), 0644); err != nil {
+		t.Fatal(err)
+	}
+	o, out, errOut := checkOpts()
+	if code := checkFile(path, o); code != 1 {
+		t.Fatalf("超限文件 check 应退出 1，实际 %d", code)
+	}
+	if !strings.Contains(errOut.String(), "10 MiB") {
+		t.Fatalf("应报 10 MiB 上限，实际 stderr: %q", errOut.String())
+	}
+	if out.Len() != 0 {
+		t.Fatalf("超限文件不应有任何 stdout，得到 %q", out.String())
+	}
+}
+
+func TestCheckStdin(t *testing.T) {
+	// `minilang check -` 从 stdin 读源码，与 `run -` 一致。
+	o, out, errOut := checkOpts()
+	o.stdin = strings.NewReader("print 40 + 2;\n")
+	if code := checkFile("-", o); code != 0 {
+		t.Fatalf("check - 应退出 0，实际 %d，stderr: %s", code, errOut.String())
+	}
+	if !strings.Contains(out.String(), ": OK") {
+		t.Fatalf("合法 stdin 源码 check 应打印通过信息，实际 stdout: %q", out.String())
+	}
+	if strings.Contains(out.String(), "42") {
+		t.Fatalf("check 不应执行程序，stdout 里不应出现程序输出，实际: %q", out.String())
 	}
 }
 

@@ -144,6 +144,22 @@ func TestREPLLoadFile(t *testing.T) {
 	}
 }
 
+func TestREPLLoadTooLarge(t *testing.T) {
+	// :load 走同一条 10 MiB 上限：超限文件应被拒掉，REPL 不退出。
+	dir := t.TempDir()
+	big := filepath.Join(dir, "big.ml")
+	if err := os.WriteFile(big, []byte(strings.Repeat(" ", maxSourceBytes+1)), 0644); err != nil {
+		t.Fatal(err)
+	}
+	out, errOut := runREPLInput(t, "vm", ":load "+big+"\nprint 7;\n:quit\n", "")
+	if !strings.Contains(errOut, "10 MiB") {
+		t.Fatalf(":load 超限文件应报 10 MiB 上限，stderr: %q", errOut)
+	}
+	if !strings.Contains(out, "7") {
+		t.Fatalf(":load 失败后 REPL 应继续，stdout: %q", out)
+	}
+}
+
 func TestREPLLoadErrorsDoNotExit(t *testing.T) {
 	dir := t.TempDir()
 	missing := filepath.Join(dir, "no-such.ml")
