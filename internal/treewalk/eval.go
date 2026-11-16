@@ -8,6 +8,12 @@ import (
 )
 
 func (in *Interp) eval(e ast.Expr, env *Env) (any, error) {
+	// 执行步数预算：与 VM 侧的指令计数器对应，死循环唯一的逃生口。
+	in.steps++
+	if in.steps > semantics.MaxExecSteps {
+		return nil, diag.New(diag.StageRuntime, e.Pos().Line, e.Pos().Col,
+			"执行步数超过 %d 步（常见原因：无限循环）", semantics.MaxExecSteps)
+	}
 	switch n := e.(type) {
 	case *ast.Literal:
 		return n.Value, nil

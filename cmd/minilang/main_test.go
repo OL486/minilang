@@ -457,14 +457,15 @@ func runREPLWithInput(t *testing.T, o options, input string) string {
 }
 
 func TestREPLBasic(t *testing.T) {
-	o, progOut, _ := testOptions()
+	o, _, _ := testOptions()
 	stdout := runREPLWithInput(t, o, "print 1 + 2;\n:quit\n")
 	if !strings.Contains(stdout, "minilang 0.1.0") {
 		t.Fatalf("REPL 应打印 banner，实际 %q", stdout)
 	}
-	// 程序输出走 session 的 out（这里是 progOut），提示符才走 os.Stdout。
-	if progOut.String() != "3\n" {
-		t.Fatalf("REPL 执行 print 1 + 2 应输出 3，实际 %q", progOut.String())
+	// runREPLIO 把提示符与程序输出都写到同一个 out（这里是捕获的 stdout），
+	// 不再像 #40 编写时那样把程序输出写到 o.out；直接在 stdout 里断言。
+	if !strings.Contains(stdout, "> 3\n") {
+		t.Fatalf("REPL 执行 print 1 + 2 应输出 3，实际 %q", stdout)
 	}
 }
 
@@ -490,22 +491,22 @@ func TestREPLTreeEngineCommands(t *testing.T) {
 
 func TestREPLMultiline(t *testing.T) {
 	// 括号没配平就继续读下一行，配平后一次执行。
-	o, progOut, _ := testOptions()
+	o, _, _ := testOptions()
 	stdout := runREPLWithInput(t, o, "fn f() {\n  return 7;\n}\nprint f();\n:quit\n")
 	if !strings.Contains(stdout, "| ") {
 		t.Fatalf("REPL 多行输入时应打印续行提示符，实际 %q", stdout)
 	}
-	if progOut.String() != "7\n" {
-		t.Fatalf("REPL 多行函数定义后应输出 7，实际 %q", progOut.String())
+	if !strings.Contains(stdout, "> 7\n") {
+		t.Fatalf("REPL 多行函数定义后应输出 7，实际 %q", stdout)
 	}
 }
 
 func TestREPLStatePersists(t *testing.T) {
 	// 上一行 let 的变量下一行能看见：会话复用同一解释器/VM。
-	o, progOut, _ := testOptions()
-	runREPLWithInput(t, o, "let x = 5;\nprint x * 2;\n:quit\n")
-	if progOut.String() != "10\n" {
-		t.Fatalf("REPL 跨行应共享变量，实际 %q", progOut.String())
+	o, _, _ := testOptions()
+	stdout := runREPLWithInput(t, o, "let x = 5;\nprint x * 2;\n:quit\n")
+	if !strings.Contains(stdout, "> 10\n") {
+		t.Fatalf("REPL 跨行应共享变量，实际 %q", stdout)
 	}
 }
 
@@ -519,10 +520,10 @@ func TestREPLEOFExits(t *testing.T) {
 }
 
 func TestREPLEmptyLinesSkipped(t *testing.T) {
-	o, progOut, _ := testOptions()
-	runREPLWithInput(t, o, "\n\nprint 9;\n:q\n")
-	if progOut.String() != "9\n" {
-		t.Fatalf("REPL 空行后应正常执行，实际 %q", progOut.String())
+	o, _, _ := testOptions()
+	stdout := runREPLWithInput(t, o, "\n\nprint 9;\n:q\n")
+	if !strings.Contains(stdout, "> 9\n") {
+		t.Fatalf("REPL 空行后应正常执行，实际 %q", stdout)
 	}
 }
 

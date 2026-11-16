@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func testOptions(out, errOut *bytes.Buffer) options {
+func sessionTestOptions(out, errOut *bytes.Buffer) options {
 	o := defaultOptions()
 	o.out = out
 	o.errOut = errOut
@@ -22,7 +22,7 @@ func TestRunFileExecutesFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out, errOut bytes.Buffer
-	if code := runFile(path, testOptions(&out, &errOut)); code != 0 {
+	if code := runFile(path, sessionTestOptions(&out, &errOut)); code != 0 {
 		t.Fatalf("runFile = %d, errOut = %q", code, errOut.String())
 	}
 	if !strings.Contains(out.String(), "9") {
@@ -32,7 +32,7 @@ func TestRunFileExecutesFile(t *testing.T) {
 
 func TestRunFileMissing(t *testing.T) {
 	var out, errOut bytes.Buffer
-	if code := runFile(filepath.Join(t.TempDir(), "no-such-file.ml"), testOptions(&out, &errOut)); code != 1 {
+	if code := runFile(filepath.Join(t.TempDir(), "no-such-file.ml"), sessionTestOptions(&out, &errOut)); code != 1 {
 		t.Fatalf("runFile = %d, want 1", code)
 	}
 	if !strings.Contains(errOut.String(), "无法读取文件") {
@@ -48,7 +48,7 @@ func TestRunFileTooLarge(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out, errOut bytes.Buffer
-	if code := runFile(path, testOptions(&out, &errOut)); code != 1 {
+	if code := runFile(path, sessionTestOptions(&out, &errOut)); code != 1 {
 		t.Fatalf("runFile = %d, want 1", code)
 	}
 	if !strings.Contains(errOut.String(), "10 MiB") {
@@ -61,7 +61,7 @@ func TestRunFileTooLarge(t *testing.T) {
 
 func TestRunFileStdin(t *testing.T) {
 	var out, errOut bytes.Buffer
-	o := testOptions(&out, &errOut)
+	o := sessionTestOptions(&out, &errOut)
 	o.stdin = strings.NewReader("print 40 + 2;\n")
 	if code := runFile("-", o); code != 0 {
 		t.Fatalf("runFile(-) = %d, errOut = %q", code, errOut.String())
@@ -73,7 +73,7 @@ func TestRunFileStdin(t *testing.T) {
 
 func TestRunFileStdinTooLarge(t *testing.T) {
 	var out, errOut bytes.Buffer
-	o := testOptions(&out, &errOut)
+	o := sessionTestOptions(&out, &errOut)
 	o.stdin = strings.NewReader(strings.Repeat(" ", maxSourceBytes+1))
 	if code := runFile("-", o); code != 1 {
 		t.Fatalf("runFile(-) = %d, want 1", code)

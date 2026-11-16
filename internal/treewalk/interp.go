@@ -30,6 +30,10 @@ type Interp struct {
 	out      io.Writer
 	depth    int
 	maxDepth int
+	// steps 是本次运行已求值的表达式数；超过 semantics.MaxExecSteps 时
+	// eval() 报运行时错误。每次 Run() 开始时清零。
+	// 每个 while 迭代至少求值一次条件表达式，所以任何无限循环都会撞上限。
+	steps int
 }
 
 // New 创建解释器，并注册内置函数。
@@ -53,8 +57,12 @@ func New(out io.Writer) *Interp {
 // Globals 暴露全局作用域，供 REPL 与测试使用。
 func (in *Interp) Globals() *Env { return in.globals }
 
+// Steps 返回本次运行已求值的表达式步数。
+func (in *Interp) Steps() int { return in.steps }
+
 // Run 在全局作用域执行一组语句。
 func (in *Interp) Run(stmts []ast.Stmt) (err error) {
+	in.steps = 0
 	defer func() {
 		if r := recover(); r != nil {
 			rs, ok := r.(returnSignal)
