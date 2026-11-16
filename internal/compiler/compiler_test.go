@@ -5,9 +5,9 @@ import (
 	"testing"
 
 	"github.com/OL486/minilang/internal/ast"
-	"github.com/OL486/minilang/internal/vm"
 	"github.com/OL486/minilang/internal/lexer"
 	"github.com/OL486/minilang/internal/parser"
+	"github.com/OL486/minilang/internal/vm"
 )
 
 // fakeAllocator 是 Allocator 的最小实现：只做编译器真正需要的三件事，
