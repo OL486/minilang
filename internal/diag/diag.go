@@ -34,8 +34,10 @@ func (e *Error) Error() string {
 	if e.Line <= 0 {
 		return fmt.Sprintf("%s错误: %s", e.Stage, e.Msg)
 	}
-	// 字节码 VM 只记录行号（chunk 的 Lines 表是按字节存行号，没有列信息）。
-	// 这种情况下不要硬凑一个「第 0 列」出来。
+	// Col <= 0 表示「只知道行、不知道列」——比如某些与具体源码点无关的
+	// 内部错误（位置是零值）。这时不要画 ^，画在第一列反而误导。
+	// 注意：字节码 VM 的运行时错误现在也带列号（chunk 逐字节记录 ast.Pos），
+	// 不再走这条分支。
 	if e.Col <= 0 {
 		return fmt.Sprintf("%s错误 (第 %d 行): %s", e.Stage, e.Line, e.Msg)
 	}
@@ -117,8 +119,8 @@ func Render(src string, e *Error) string {
 	// 行号右对齐到 4 位，方便多行报错时竖着看。
 	b.WriteString("\n")
 	b.WriteString(fmt.Sprintf("%4d | %s\n", e.Line, text))
-	// Col <= 0 表示「只知道行、不知道列」——字节码 VM 运行时错误就是这种情况，
-	// 因为 chunk 只记录了每字节的行号。这时不要画 ^，画在第一列反而误导。
+	// Col <= 0 表示「只知道行、不知道列」——见 Error() 的注释。
+	// 这时不要画 ^，画在第一列反而误导。
 	if e.Col <= 0 {
 		return strings.TrimRight(b.String(), "\n")
 	}

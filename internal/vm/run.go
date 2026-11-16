@@ -3,6 +3,7 @@ package vm
 import (
 	"fmt"
 
+	"github.com/OL486/minilang/internal/ast"
 	"github.com/OL486/minilang/internal/diag"
 	"github.com/OL486/minilang/internal/semantics"
 )
@@ -31,7 +32,7 @@ func (vm *VM) RunScript(fn *ObjFunction) (Value, error) {
 
 	cl := vm.newClosure(fn)
 	vm.push(ObjValue(cl)) // 脚本闭包占用槽位 0
-	if err := vm.callClosure(cl, 0, 0); err != nil {
+	if err := vm.callClosure(cl, 0, ast.Pos{}); err != nil {
 		vm.sp = 0
 		return NilValue(), err
 	}
@@ -46,7 +47,7 @@ func (vm *VM) Run() (result Value, err error) {
 				panic(r)
 			}
 			result = NilValue()
-			err = diag.New(diag.StageRuntime, vm.curLine, 0,
+			err = diag.New(diag.StageRuntime, vm.curPos.Line, vm.curPos.Col,
 				"VM 栈溢出：操作数栈超过 %d 个槽位（常见原因：无限递归、或表达式嵌套过深）", StackMax)
 		}
 	}()
@@ -61,8 +62,8 @@ func (vm *VM) Run() (result Value, err error) {
 		pc := f.ip
 		op := Op(chunk.Code[pc])
 		f.ip++
-		line := chunk.LineAt(pc)
-		vm.curLine = line
+		pos := chunk.PosAt(pc)
+		vm.curPos = pos
 		if vm.trace {
 			vm.traceInstruction(pc, op)
 		}
@@ -72,7 +73,7 @@ func (vm *VM) Run() (result Value, err error) {
 		// 超限报运行时错误（而不是静默截断），与调用帧、操作数栈等上限一致。
 		vm.steps++
 		if vm.steps > semantics.MaxExecSteps {
-			return NilValue(), diag.New(diag.StageRuntime, line, 0,
+			return NilValue(), diag.New(diag.StageRuntime, vm.curPos.Line, vm.curPos.Col,
 				"执行步数超过 %d 步（常见原因：无限循环）", semantics.MaxExecSteps)
 		}
 
@@ -107,7 +108,7 @@ func (vm *VM) Run() (result Value, err error) {
 			f.ip++
 			v, ok := vm.globals[name.Chars]
 			if !ok {
-				return NilValue(), diag.New(diag.StageRuntime, line, 0, "未定义的变量 '%s'", name.Chars)
+				return NilValue(), diag.New(diag.StageRuntime, pos.Line, pos.Col, "未定义的变量 '%s'", name.Chars)
 			}
 			vm.push(v)
 		case OpDefineGlobal:
@@ -118,7 +119,7 @@ func (vm *VM) Run() (result Value, err error) {
 			name := chunk.Constants[chunk.Code[f.ip]].AsString()
 			f.ip++
 			if _, ok := vm.globals[name.Chars]; !ok {
-				return NilValue(), diag.New(diag.StageRuntime, line, 0,
+				return NilValue(), diag.New(diag.StageRuntime, pos.Line, pos.Col,
 					"不能给未定义的变量 '%s' 赋值（minilang 没有隐式全局变量）", name.Chars)
 			}
 			vm.globals[name.Chars] = vm.peek(0)
@@ -137,39 +138,39 @@ func (vm *VM) Run() (result Value, err error) {
 			a := vm.pop()
 			vm.push(BoolValue(valuesEqual(a, b)))
 		case OpGreater:
-			if err := vm.compareAndPush(OpGreater, line); err != nil {
+			if err := vm.compareAndPush(OpGreater, pos); err != nil {
 				return NilValue(), err
 			}
 		case OpGreaterEqual:
-			if err := vm.compareAndPush(OpGreaterEqual, line); err != nil {
+			if err := vm.compareAndPush(OpGreaterEqual, pos); err != nil {
 				return NilValue(), err
 			}
 		case OpLess:
-			if err := vm.compareAndPush(OpLess, line); err != nil {
+			if err := vm.compareAndPush(OpLess, pos); err != nil {
 				return NilValue(), err
 			}
 		case OpLessEqual:
-			if err := vm.compareAndPush(OpLessEqual, line); err != nil {
+			if err := vm.compareAndPush(OpLessEqual, pos); err != nil {
 				return NilValue(), err
 			}
 		case OpAdd:
-			if err := vm.add(line); err != nil {
+			if err := vm.add(pos); err != nil {
 				return NilValue(), err
 			}
 		case OpSubtract:
-			if err := vm.arith(OpSubtract, line); err != nil {
+			if err := vm.arith(OpSubtract, pos); err != nil {
 				return NilValue(), err
 			}
 		case OpMultiply:
-			if err := vm.arith(OpMultiply, line); err != nil {
+			if err := vm.arith(OpMultiply, pos); err != nil {
 				return NilValue(), err
 			}
 		case OpDivide:
-			if err := vm.arith(OpDivide, line); err != nil {
+			if err := vm.arith(OpDivide, pos); err != nil {
 				return NilValue(), err
 			}
 		case OpModulo:
-			if err := vm.arith(OpModulo, line); err != nil {
+			if err := vm.arith(OpModulo, pos); err != nil {
 				return NilValue(), err
 			}
 		case OpNot:
@@ -177,7 +178,7 @@ func (vm *VM) Run() (result Value, err error) {
 		case OpNegate:
 			v := vm.pop()
 			if !v.IsNumber() {
-				return NilValue(), diag.New(diag.StageRuntime, line, 0,
+				return NilValue(), diag.New(diag.StageRuntime, pos.Line, pos.Col,
 					"一元 - 只能作用于 number，实际是 %s", v.TypeName())
 			}
 			vm.push(NumberValue(-v.AsNumber()))
@@ -201,7 +202,7 @@ func (vm *VM) Run() (result Value, err error) {
 		case OpCall:
 			argc := int(chunk.Code[f.ip])
 			f.ip++
-			if err := vm.callValue(vm.peek(argc), argc, line); err != nil {
+			if err := vm.callValue(vm.peek(argc), argc, pos); err != nil {
 				return NilValue(), err
 			}
 
@@ -241,7 +242,7 @@ func (vm *VM) Run() (result Value, err error) {
 			vm.push(result)
 
 		default:
-			return NilValue(), diag.New(diag.StageRuntime, line, 0, "内部错误：未知操作码 %d", byte(op))
+			return NilValue(), diag.New(diag.StageRuntime, pos.Line, pos.Col, "内部错误：未知操作码 %d", byte(op))
 		}
 	}
 }

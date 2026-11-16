@@ -7,6 +7,8 @@ import (
 	"io"
 	"strings"
 	"testing"
+
+	"github.com/OL486/minilang/internal/ast"
 )
 
 // ---------- upvalue ----------
@@ -73,12 +75,12 @@ func TestCallClosureFrameLimitDirect(t *testing.T) {
 	fn := vm.NewFunction("f", 0)
 	cl := vm.newClosure(fn)
 	vm.frameCount = FramesMax
-	err := vm.callClosure(cl, 0, 1)
+	err := vm.callClosure(cl, 0, ast.Pos{Line: 1, Col: 1})
 	if err == nil || !strings.Contains(err.Error(), "调用栈溢出") {
 		t.Fatalf("帧满时 callClosure 应报错调用栈溢出，实际 err = %v", err)
 	}
 	vm.frameCount = 0
-	if err := vm.callClosure(cl, 0, 1); err != nil {
+	if err := vm.callClosure(cl, 0, ast.Pos{Line: 1, Col: 1}); err != nil {
 		t.Fatalf("空闲时 callClosure 不应报错，实际 err = %v", err)
 	}
 	if vm.frameCount != 1 {
@@ -89,7 +91,7 @@ func TestCallClosureFrameLimitDirect(t *testing.T) {
 func TestCallValueErrors(t *testing.T) {
 	vm := NewVM(io.Discard)
 	// 调用非函数。
-	if err := vm.callValue(NumberValue(1), 0, 1); err == nil ||
+	if err := vm.callValue(NumberValue(1), 0, ast.Pos{Line: 1, Col: 1}); err == nil ||
 		!strings.Contains(err.Error(), "不是函数，不能调用") {
 		t.Fatalf("调用 number 应报错不是函数，实际 err = %v", err)
 	}
@@ -98,14 +100,14 @@ func TestCallValueErrors(t *testing.T) {
 	if !ok {
 		t.Fatalf("NewVM 应注册 clock")
 	}
-	if err := vm.callValue(clock, 1, 1); err == nil ||
+	if err := vm.callValue(clock, 1, ast.Pos{Line: 1, Col: 1}); err == nil ||
 		!strings.Contains(err.Error(), "内置函数 clock 需要 0 个参数") {
 		t.Fatalf("clock(1) 应报错参数个数，实际 err = %v", err)
 	}
 	// 闭包参数个数不对。
 	fn := vm.NewFunction("f", 2)
 	cl := vm.newClosure(fn)
-	if err := vm.callValue(ObjValue(cl), 1, 1); err == nil ||
+	if err := vm.callValue(ObjValue(cl), 1, ast.Pos{Line: 1, Col: 1}); err == nil ||
 		!strings.Contains(err.Error(), "函数 f 需要 2 个参数，传入了 1 个") {
 		t.Fatalf("闭包参数个数不对时应报错，实际 err = %v", err)
 	}
@@ -175,7 +177,7 @@ func TestArithUnknownOp(t *testing.T) {
 	vm := NewVM(io.Discard)
 	vm.push(NumberValue(1))
 	vm.push(NumberValue(2))
-	err := vm.arith(OpAdd, 1)
+	err := vm.arith(OpAdd, ast.Pos{Line: 1, Col: 1})
 	if err == nil || !strings.Contains(err.Error(), "内部错误：未知操作码") {
 		t.Fatalf("arith(OpAdd) 应报未知操作码，实际 err = %v", err)
 	}
@@ -324,7 +326,7 @@ func TestCallNativeWithArgsAndError(t *testing.T) {
 	// echo(42)：栈上依次是 callee、实参；调用后栈顶应是返回值。
 	vm.push(vm.globals["echo"])
 	vm.push(NumberValue(42))
-	if err := vm.callValue(vm.peek(1), 1, 1); err != nil {
+	if err := vm.callValue(vm.peek(1), 1, ast.Pos{Line: 1, Col: 1}); err != nil {
 		t.Fatalf("echo(42) 不应报错，实际 err = %v", err)
 	}
 	if got := vm.peek(0); !got.IsNumber() || got.AsNumber() != 42 {
@@ -336,7 +338,7 @@ func TestCallNativeWithArgsAndError(t *testing.T) {
 
 	// boom()：内置函数返回 error 应被包装成 diag 错误。
 	vm.push(vm.globals["boom"])
-	if err := vm.callValue(vm.peek(0), 0, 1); err == nil ||
+	if err := vm.callValue(vm.peek(0), 0, ast.Pos{Line: 1, Col: 1}); err == nil ||
 		!strings.Contains(err.Error(), "内置函数 boom 出错") {
 		t.Fatalf("boom() 应报内置函数出错，实际 err = %v", err)
 	}

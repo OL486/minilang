@@ -3,6 +3,8 @@ package vm
 import (
 	"strings"
 	"testing"
+
+	"github.com/OL486/minilang/internal/ast"
 )
 
 func TestAddConstantLimit(t *testing.T) {
@@ -20,21 +22,43 @@ func TestAddConstantLimit(t *testing.T) {
 	}
 }
 
-func TestChunkLineAt(t *testing.T) {
+func TestChunkPosAt(t *testing.T) {
 	c := NewChunk()
-	c.Write(byte(OpNil), 3)
-	c.Write(byte(OpReturn), 3)
-	if got := c.LineAt(0); got != 3 {
-		t.Fatalf("LineAt(0) = %d, want 3", got)
+	c.Write(byte(OpNil), ast.Pos{Line: 3, Col: 5})
+	c.Write(byte(OpReturn), ast.Pos{Line: 3, Col: 7})
+	if got := c.PosAt(0); got != (ast.Pos{Line: 3, Col: 5}) {
+		t.Fatalf("PosAt(0) = %+v, want {Line:3 Col:5}", got)
 	}
-	if got := c.LineAt(1); got != 3 {
-		t.Fatalf("LineAt(1) = %d, want 3", got)
+	if got := c.PosAt(1); got != (ast.Pos{Line: 3, Col: 7}) {
+		t.Fatalf("PosAt(1) = %+v, want {Line:3 Col:7}", got)
 	}
-	if got := c.LineAt(2); got != 0 {
-		t.Fatalf("LineAt(2) = %d, want 0 (out of range)", got)
+	if got := c.PosAt(2); got != (ast.Pos{}) {
+		t.Fatalf("PosAt(2) = %+v, want zero Pos (out of range)", got)
 	}
-	if got := c.LineAt(-1); got != 0 {
-		t.Fatalf("LineAt(-1) = %d, want 0 (out of range)", got)
+	if got := c.PosAt(-1); got != (ast.Pos{}) {
+		t.Fatalf("PosAt(-1) = %+v, want zero Pos (out of range)", got)
+	}
+}
+
+// TestDisassembleShowsColumns 验证反汇编打出「行:列」：
+// 同一行的后续指令仍用 | 占位，行号变化时才重新打印位置。
+func TestDisassembleShowsColumns(t *testing.T) {
+	c := NewChunk()
+	c.Write(byte(OpConstant), ast.Pos{Line: 2, Col: 7})
+	c.Write(0, ast.Pos{Line: 2, Col: 7})
+	c.Write(byte(OpPrint), ast.Pos{Line: 2, Col: 7})
+	c.AddConstant(NumberValue(42))
+	c.Write(byte(OpReturn), ast.Pos{Line: 3, Col: 1})
+
+	out := c.Disassemble("test")
+	if !strings.Contains(out, "2:7") {
+		t.Fatalf("Disassemble 没有打印列号 2:7:\n%s", out)
+	}
+	if !strings.Contains(out, "3:1") {
+		t.Fatalf("Disassemble 没有打印列号 3:1:\n%s", out)
+	}
+	if !strings.Contains(out, "|") {
+		t.Fatalf("Disassemble 同行指令应以 | 占位:\n%s", out)
 	}
 }
 
@@ -45,11 +69,11 @@ func TestDisassembleClosureLength(t *testing.T) {
 	fn := &ObjFunction{Name: "inc", Arity: 0, UpvalueCount: 1, Chunk: NewChunk()}
 	c := NewChunk()
 	idx := c.AddConstant(ObjValue(fn))
-	c.Write(byte(OpClosure), 1)
-	c.Write(byte(idx), 1)
-	c.Write(1, 1) // isLocal = 1
-	c.Write(0, 1) // index = 0
-	c.Write(byte(OpReturn), 2)
+	c.Write(byte(OpClosure), ast.Pos{Line: 1, Col: 1})
+	c.Write(byte(idx), ast.Pos{Line: 1, Col: 1})
+	c.Write(1, ast.Pos{Line: 1, Col: 1}) // isLocal = 1
+	c.Write(0, ast.Pos{Line: 1, Col: 1}) // index = 0
+	c.Write(byte(OpReturn), ast.Pos{Line: 2, Col: 1})
 
 	out := c.Disassemble("test")
 	if !strings.Contains(out, "OP_CLOSURE") {
@@ -71,9 +95,9 @@ func TestDisassembleClosureNoUpvalues(t *testing.T) {
 	fn := &ObjFunction{Name: "f", Arity: 0, UpvalueCount: 0, Chunk: NewChunk()}
 	c := NewChunk()
 	idx := c.AddConstant(ObjValue(fn))
-	c.Write(byte(OpClosure), 1)
-	c.Write(byte(idx), 1)
-	c.Write(byte(OpReturn), 2)
+	c.Write(byte(OpClosure), ast.Pos{Line: 1, Col: 1})
+	c.Write(byte(idx), ast.Pos{Line: 1, Col: 1})
+	c.Write(byte(OpReturn), ast.Pos{Line: 2, Col: 1})
 
 	out := c.Disassemble("test")
 	if !strings.Contains(out, "upvalues=0") {
@@ -87,9 +111,9 @@ func TestDisassembleClosureNoUpvalues(t *testing.T) {
 
 func TestDisassembleSimple(t *testing.T) {
 	c := NewChunk()
-	c.Write(byte(OpConstant), 1)
-	c.Write(0, 1)
-	c.Write(byte(OpPrint), 1)
+	c.Write(byte(OpConstant), ast.Pos{Line: 1, Col: 1})
+	c.Write(0, ast.Pos{Line: 1, Col: 1})
+	c.Write(byte(OpPrint), ast.Pos{Line: 1, Col: 1})
 	c.AddConstant(NumberValue(42))
 
 	out := c.Disassemble("test")

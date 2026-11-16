@@ -4,6 +4,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/OL486/minilang/internal/ast"
 	"github.com/OL486/minilang/internal/semantics"
 )
 
@@ -64,7 +65,9 @@ type VM struct {
 	gcEnabled      bool
 	gcRuns         int
 	objectsCreated int
-	curLine        int
+	// curPos 是当前正在执行的指令对应的源码位置。
+	// 栈溢出是 recover 抓到的，发生时手里没有指令位置，只能靠它。
+	curPos ast.Pos
 
 	// steps 是本次运行已执行的指令数；超过 semantics.MaxExecSteps 时
 	// Run() 报运行时错误。每次 Run() 开始时清零。

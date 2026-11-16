@@ -1,6 +1,7 @@
 package compiler
 
 import (
+	"github.com/OL486/minilang/internal/ast"
 	"github.com/OL486/minilang/internal/vm"
 )
 
@@ -8,31 +9,31 @@ import (
 
 func (c *Compiler) beginScope() { c.fn.scopeDepth++ }
 
-func (c *Compiler) endScope(line int) {
+func (c *Compiler) endScope(pos ast.Pos) {
 	c.fn.scopeDepth--
 	for len(c.fn.locals) > 0 && c.fn.locals[len(c.fn.locals)-1].depth > c.fn.scopeDepth {
 		if c.fn.locals[len(c.fn.locals)-1].captured {
 			// 被闭包捕获过的局部变量不能简单 POP：必须先把值搬到堆上，
 			// 否则栈槽被后续代码复用时，闭包看到的就是别人的值。
-			c.emit(vm.OpCloseUpvalue, line)
+			c.emit(vm.OpCloseUpvalue, pos)
 		} else {
-			c.emit(vm.OpPop, line)
+			c.emit(vm.OpPop, pos)
 		}
 		c.fn.locals = c.fn.locals[:len(c.fn.locals)-1]
 	}
 }
 
-func (c *Compiler) declareLocal(name string, line int) {
+func (c *Compiler) declareLocal(name string, pos ast.Pos) {
 	for i := len(c.fn.locals) - 1; i >= 0; i-- {
 		if c.fn.locals[i].depth < c.fn.scopeDepth {
 			break
 		}
 		if c.fn.locals[i].name == name {
-			c.errorAt(line, "同一作用域内重复声明变量 '%s'", name)
+			c.errorAt(pos, "同一作用域内重复声明变量 '%s'", name)
 		}
 	}
 	if len(c.fn.locals) >= maxLocals {
-		c.errorAt(line, "局部变量超过 %d 个", maxLocals)
+		c.errorAt(pos, "局部变量超过 %d 个", maxLocals)
 	}
 	c.fn.locals = append(c.fn.locals, local{name: name, depth: c.fn.scopeDepth})
 }
@@ -80,8 +81,10 @@ func (c *Compiler) addUpvalue(fs *fnState, index uint8, isLocal bool) int {
 			return i
 		}
 	}
+	// 这里没有现成的 token 位置：upvalue 上限是函数结构的限制，
+	// 不对应某个源码点，沿用以前「第 0 行」的无位置报错。
 	if len(fs.upvalues) >= maxUpvalues {
-		c.errorAt(0, "upvalue 超过 %d 个", maxUpvalues)
+		c.errorAt(ast.Pos{}, "upvalue 超过 %d 个", maxUpvalues)
 	}
 	fs.upvalues = append(fs.upvalues, upvalueDesc{index: index, isLocal: isLocal})
 	return len(fs.upvalues) - 1

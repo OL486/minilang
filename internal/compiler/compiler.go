@@ -84,7 +84,7 @@ func CompileProgram(a Allocator, stmts []ast.Stmt) (fn *vm.ObjFunction, errs []*
 	for _, s := range stmts {
 		c.stmt(s)
 	}
-	c.emitReturn(lastLine(stmts))
+	c.emitReturn(lastPos(stmts))
 	a.PopRoot()
 
 	if len(c.errs) > 0 {
@@ -94,14 +94,14 @@ func CompileProgram(a Allocator, stmts []ast.Stmt) (fn *vm.ObjFunction, errs []*
 	return script, nil
 }
 
-// lastLine 用于给「函数结尾的隐式 return」分配一个行号。
-// 全用 0 的话，--dump-bytecode 里最后两条指令会显示第 0 行，
-// 一旦在这里触发运行时错误（比如栈溢出），报出来的行号就是错的。
-func lastLine(stmts []ast.Stmt) int {
+// lastPos 用于给「函数结尾的隐式 return」分配一个源码位置。
+// 全用零值的话，--dump-bytecode 里最后两条指令会显示第 0 行第 0 列，
+// 一旦在这里触发运行时错误（比如栈溢出），报出来的位置就是错的。
+func lastPos(stmts []ast.Stmt) ast.Pos {
 	if len(stmts) == 0 {
-		return 1
+		return ast.Pos{Line: 1, Col: 1}
 	}
-	return stmts[len(stmts)-1].Pos().Line
+	return stmts[len(stmts)-1].Pos()
 }
 
 func displayFnName(n string) string {

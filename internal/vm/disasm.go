@@ -37,13 +37,15 @@ func (c *Chunk) dump(b *strings.Builder, name string, depth int) {
 
 func (c *Chunk) disassembleInstruction(b *strings.Builder, offset int, pad string) int {
 	fmt.Fprintf(b, "%s%04d ", pad, offset)
-	line := c.LineAt(offset)
-	// 同一行连续指令不重复打印行号，用 | 占位，
+	pos := c.PosAt(offset)
+	// 同一行连续指令不重复打印位置，用 | 占位，
 	// 纵向扫读时更容易看出「这一行源码编译成了哪几条指令」。
-	if offset > 0 && line == c.LineAt(offset-1) {
-		b.WriteString("   | ")
+	// 位置栏固定 9 字符宽（行右对齐 4 位 + 冒号 + 列左对齐 3 位 + 空格），
+	// 这样 opcode 列始终对齐。
+	if offset > 0 && pos.Line == c.PosAt(offset-1).Line {
+		b.WriteString("   |     ")
 	} else {
-		fmt.Fprintf(b, "%4d ", line)
+		fmt.Fprintf(b, "%4d:%-3d ", pos.Line, pos.Col)
 	}
 
 	op := Op(c.Code[offset])
@@ -87,7 +89,7 @@ func (c *Chunk) constantInstruction(b *strings.Builder, op Op, offset int, pad s
 			if isLocal == 1 {
 				kind = "local"
 			}
-			fmt.Fprintf(b, "%s%04d    | %-20s   %s[%d]\n", pad, next, "", kind, index)
+			fmt.Fprintf(b, "%s%04d    |     %-20s   %s[%d]\n", pad, next, "", kind, index)
 			next += 2
 		}
 		return next
