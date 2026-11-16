@@ -67,7 +67,7 @@ pack-check:
 	(cd "$$tmp/dist" && if command -v sha256sum >/dev/null; then sha256sum -c checksums.txt; else shasum -a 256 -c checksums.txt; fi) && \
 	echo "pack-check: ok"
 
-## release: 交叉编译 5 个平台并打包到 dist/
+## release: 交叉编译 6 个平台并打包到 dist/
 release:
 	go run tools/pack/main.go
 
