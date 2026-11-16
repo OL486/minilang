@@ -20,7 +20,7 @@ endif
 
 OUT := $(BINARY)$(EXE)
 
-.PHONY: all build install test vet fmt fmt-check check release clean bench examples repl help
+.PHONY: all build install test vet fmt fmt-check check pack-check release clean bench examples repl help
 
 all: check
 
@@ -40,6 +40,8 @@ test:
 ## vet: 静态检查
 vet:
 	go vet ./...
+	# pack 带 //go:build ignore，go vet ./... 会跳过它，单独对文件跑一次。
+	go vet tools/pack/main.go
 
 ## fmt: 格式化
 fmt:
@@ -54,6 +56,16 @@ fmt-check:
 ## check: 提交前必过的一道关（格式 + 静态检查 + 测试）
 check: fmt-check vet test
 	@echo "check: all green"
+
+## pack-check: 干跑打包到临时目录并校验 checksums（CI 用）。
+# 不进 make check：完整打包要交叉编译 6 个平台，约 1 分钟，提交前检查应保持快。
+# CI 的 check job 单独跑这一步；本地手动跑 make pack-check 即可复现。
+pack-check:
+	@tmp=$$(mktemp -d); \
+	trap 'rm -rf "$$tmp"' EXIT; \
+	go run tools/pack/main.go -out "$$tmp/dist" && \
+	(cd "$$tmp/dist" && if command -v sha256sum >/dev/null; then sha256sum -c checksums.txt; else shasum -a 256 -c checksums.txt; fi) && \
+	echo "pack-check: ok"
 
 ## release: 交叉编译 5 个平台并打包到 dist/
 release:
