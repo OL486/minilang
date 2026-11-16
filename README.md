@@ -118,15 +118,16 @@ minilang bench                  # 字节码 VM
 minilang bench --engine=tree    # tree-walking（S5 基线）
 ```
 
-### 三个调试开关（可以任意组合）
+### 四个调试开关（可以任意组合）
 
 ```bash
 minilang run x.ml --dump-tokens      # token 流：类型 / 字面量 / 行号
 minilang run x.ml --dump-ast         # 语法树：缩进树形
 minilang run x.ml --dump-bytecode    # 反汇编：偏移 / 行号 / opcode / 操作数 / 常量池
+minilang run x.ml --trace            # 逐指令跟踪：pc / opcode / 栈顶（仅 VM 引擎）
 ```
 
-这三个开关是排错能力的全部基础，用法见 [`docs/01-pipeline.md`](docs/01-pipeline.md)。
+这四个开关是排错能力的全部基础，用法见 [`docs/01-pipeline.md`](docs/01-pipeline.md)。
 
 ### 其他
 

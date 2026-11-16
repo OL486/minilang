@@ -4,7 +4,7 @@
 //	minilang repl                 交互式解释器
 //	minilang bench                跑 fib(30) 基准测试
 //
-// 三个调试开关（--dump-tokens / --dump-ast / --dump-bytecode）可以任意组合，
+// 四个调试开关（--dump-tokens / --dump-ast / --dump-bytecode / --trace）可以任意组合，
 // 用来逐段检查流水线。它们输出到 stdout，执行结果也输出到 stdout，
 // 报错输出到 stderr —— 这样 `minilang run x.ml > out.txt` 拿到的是干净的程序输出。
 //

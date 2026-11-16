@@ -11,6 +11,7 @@ type options struct {
 	dumpTokens   bool
 	dumpAST      bool
 	dumpBytecode bool
+	trace        bool
 	stats        bool
 	engine       string
 	gcOff        bool
@@ -29,6 +30,7 @@ func addFlags(fs *flag.FlagSet, o *options) {
 	fs.BoolVar(&o.dumpTokens, "dump-tokens", false, "打印词法分析后的 token 流（类型/字面量/行号）")
 	fs.BoolVar(&o.dumpAST, "dump-ast", false, "打印解析后的 AST（缩进树形）")
 	fs.BoolVar(&o.dumpBytecode, "dump-bytecode", false, "打印反汇编结果（偏移/opcode/操作数/常量池）")
+	fs.BoolVar(&o.trace, "trace", false, "逐指令打印 pc / opcode / 栈顶（仅 VM 引擎）")
 	fs.BoolVar(&o.stats, "stats", false, "执行结束后打印对象堆与 GC 统计")
 	fs.BoolVar(&o.gcOff, "gc-off", false, "关闭 GC（仅用于对比，长时间运行会吃满内存）")
 	fs.StringVar(&o.engine, "engine", "vm", "执行引擎: vm | tree")
@@ -83,6 +85,7 @@ func usage() {
   --dump-tokens      打印 token 流
   --dump-ast         打印语法树
   --dump-bytecode    打印反汇编
+  --trace            逐指令打印 pc / opcode / 栈顶（仅 VM 引擎）
   --engine=vm|tree   选择执行引擎（默认 vm）
   --stats            执行后打印对象堆统计
   --gc-off           关闭 GC（对比用）

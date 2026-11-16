@@ -193,17 +193,56 @@ func (c *Compiler) patchJump(offset int) {
 
 ---
 
-## 三个开关的组合用法
+## 第四站：`--trace`
+
+`--dump-bytecode` 是静态的反汇编，`--trace` 是运行时的逐指令跟踪：
+执行每条指令前打印一行 `pc / opcode / 栈顶`，格式与反汇编同一套
+（`%04d` + 左对齐 20 列 opcode 名），方便两者逐行对照。
+
+```bash
+minilang run p.ml --trace
+```
+
+```
+0000 OP_CONSTANT          栈顶: <fn script>
+0002 OP_CONSTANT          栈顶: 1
+0004 OP_CONSTANT          栈顶: 2
+0006 OP_MULTIPLY          栈顶: 3
+0007 OP_ADD               栈顶: 6
+0008 OP_DEFINE_GLOBAL     栈顶: 7
+0010 OP_GET_GLOBAL        栈顶: <fn script>
+0012 OP_CONSTANT          栈顶: 7
+0014 OP_GREATER           栈顶: 5
+0015 OP_JUMP_IF_FALSE     栈顶: true
+0018 OP_POP               栈顶: true
+0019 OP_CONSTANT          栈顶: <fn script>
+0021 OP_PRINT             栈顶: big
+big
+```
+
+注意**栈顶是执行前的值**：`OP_ADD` 这一行看到的 `6` 是 `2 * 3` 的结果
+（两个操作数里上面的那个），相加后的 `7` 要到下一行
+（`OP_DEFINE_GLOBAL`）的栈顶才能看到。读 trace 时按这个规则推，
+每一步的栈变化就都对得上。
+
+`--trace` 只在 VM 引擎下生效（tree 引擎没有字节码可跟），
+`--engine=tree` 时会明确提示并照常执行程序。输出与程序的 `print`
+走同一路 stdout，和 `--dump-bytecode` 的惯例一致。
+
+---
+
+## 四个开关的组合用法
 
 | 症状 | 先看哪一站 |
 |---|---|
 | 报错位置不对、字符串内容怪 | `--dump-tokens` |
 | 优先级/结合性不对、`else` 挂错 | `--dump-ast` |
 | 结果算错但 AST 是对的、死循环、变量串值 | `--dump-bytecode` |
+| 某一步的栈值不对、死循环卡在哪条指令 | `--trace` |
 | 两个引擎结果不一致 | 先各跑一遍对比输出，再 `--dump-ast` 确认树相同，问题一定在编译或 VM |
 
 一次全开也行，输出是按流水线顺序拼起来的，不会交错：
 
 ```bash
-minilang run examples/03-closures.ml --dump-tokens --dump-ast --dump-bytecode
+minilang run examples/03-closures.ml --dump-tokens --dump-ast --dump-bytecode --trace
 ```
