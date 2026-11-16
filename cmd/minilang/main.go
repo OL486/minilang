@@ -26,18 +26,24 @@ func main() {
 	args := os.Args[1:]
 
 	// 先把子命令摘出来，剩下的才交给 flag 解析。
+	// --help/--version 这类开关式子命令要先于「- 开头不是子命令」的判断处理，
+	// 否则它们会掉进 flag 解析，报「flag provided but not defined」。
 	cmd := "run"
-	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
+	if len(args) > 0 {
 		switch args[0] {
-		case "repl", "bench", "run":
-			cmd = args[0]
-			args = args[1:]
 		case "help", "--help", "-h":
 			usage()
 			return
 		case "version", "--version", "-v":
 			fmt.Printf("minilang %s\n", version)
 			return
+		}
+		if !strings.HasPrefix(args[0], "-") {
+			switch args[0] {
+			case "repl", "bench", "run":
+				cmd = args[0]
+				args = args[1:]
+			}
 		}
 	}
 

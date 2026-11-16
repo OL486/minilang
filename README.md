@@ -231,6 +231,7 @@ done
 
 ## 文档
 
+- [`docs/05-tutorial.md`](docs/05-tutorial.md) —— 10 分钟上手：安装、第一个程序、语言速览、双引擎、dump 开关、REPL
 - [`docs/00-spec.md`](docs/00-spec.md) —— 语言规范：BNF、优先级、语义、错误约定、目录结构
 - [`docs/01-pipeline.md`](docs/01-pipeline.md) —— 三个 dump 怎么读，附真实输出
 - [`docs/02-pitfalls.md`](docs/02-pitfalls.md) —— 五个陷阱的完整分析 + 实现中真实踩到的两个坑
