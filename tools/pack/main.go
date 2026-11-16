@@ -1,4 +1,10 @@
-//go:build ignore
+//go:build pack
+
+// 注意：这里用 pack 而不是 ignore —— 测试文件 main_test.go 用同一个 tag，
+// 用 `go test -tags pack ./tools/pack/` 跑；ignore 还会命中标准库里的生成器文件，
+// `go test -tags ignore` 会把标准库一起编进来直接失败。
+// 平时 `go run tools/pack/main.go`（传文件参数时约束会被忽略）和
+// `go vet tools/pack/main.go` 都不受影响，`go test ./...` 仍会跳过它。
 
 // Command pack 交叉编译 minilang 到多个平台，并打包成可分发的压缩包。
 //
@@ -59,6 +65,33 @@ var targets = []target{
 	{"darwin", "arm64"},
 }
 
+// baseName 是单个平台产物的基础名（不含扩展名）：minilang_<版本>_<系统>_<架构>。
+func baseName(version string, t target) string {
+	return fmt.Sprintf("minilang_%s_%s_%s", version, t.os, t.arch)
+}
+
+// archiveName 是单个平台的压缩包文件名：windows 用 .zip，其余用 .tar.gz。
+func archiveName(version string, t target) string {
+	if t.os == "windows" {
+		return baseName(version, t) + ".zip"
+	}
+	return baseName(version, t) + ".tar.gz"
+}
+
+// binaryName 是单个平台的可执行文件名：windows 带 .exe，其余不带。
+func binaryName(os string) string {
+	if os == "windows" {
+		return "minilang.exe"
+	}
+	return "minilang"
+}
+
+// checksumLine 是 checksums.txt 里的一行：sha256 + 两个空格 + 文件名
+// （两个空格是 sha256sum -c 认识的格式，只写路径的基础名）。
+func checksumLine(sum, archivePath string) string {
+	return fmt.Sprintf("%s  %s", sum, filepath.Base(archivePath))
+}
+
 // payload 是打进压缩包的一个文件。
 type payload struct {
 	name string // 压缩包内路径，用 / 分隔
@@ -107,7 +140,7 @@ func run() error {
 		if err != nil {
 			return err
 		}
-		sums = append(sums, fmt.Sprintf("%s  %s", sum, filepath.Base(archive)))
+		sums = append(sums, checksumLine(sum, archive))
 	}
 
 	// checksums.txt 用「两个空格」分隔，这是 sha256sum -c 认识的格式。
@@ -127,11 +160,7 @@ func run() error {
 
 // buildOne 编译一个平台并打成压缩包，返回压缩包路径。
 func buildOne(t target, version, buildDir, distDir string) (string, error) {
-	name := fmt.Sprintf("minilang_%s_%s_%s", version, t.os, t.arch)
-	binName := "minilang"
-	if t.os == "windows" {
-		binName += ".exe"
-	}
+	binName := binaryName(t.os)
 
 	binPath := filepath.Join(buildDir, t.os+"_"+t.arch, binName)
 	if err := os.MkdirAll(filepath.Dir(binPath), 0o755); err != nil {
@@ -172,13 +201,13 @@ func buildOne(t target, version, buildDir, distDir string) (string, error) {
 		return "", err
 	}
 
-	prefix := name + "/"
+	prefix := baseName(version, t) + "/"
 	var archivePath string
 	if t.os == "windows" {
-		archivePath = filepath.Join(distDir, name+".zip")
+		archivePath = filepath.Join(distDir, archiveName(version, t))
 		err = writeZip(archivePath, prefix, files)
 	} else {
-		archivePath = filepath.Join(distDir, name+".tar.gz")
+		archivePath = filepath.Join(distDir, archiveName(version, t))
 		err = writeTarGz(archivePath, prefix, files)
 	}
 	if err != nil {
