@@ -1,5 +1,10 @@
 # minilang
 
+[![CI](https://github.com/OL486/minilang/actions/workflows/ci.yml/badge.svg)](https://github.com/OL486/minilang/actions/workflows/ci.yml)
+[![Release](https://github.com/OL486/minilang/actions/workflows/release.yml/badge.svg)](https://github.com/OL486/minilang/actions/workflows/release.yml)
+[![Go](https://img.shields.io/badge/go-1.22+-00ADD8?logo=go)](https://go.dev/dl/)
+[![License](https://img.shields.io/github/license/OL486/minilang)](LICENSE)
+
 一门从零实现的小语言：词法分析 → Pratt 解析 → tree-walking 解释器 → 字节码编译器 → 栈式虚拟机 → 标记-清除 GC。
 
 零外部依赖，只用 Go 标准库。`go build ./...`、`go vet ./...`、`go test ./...` 全绿。
