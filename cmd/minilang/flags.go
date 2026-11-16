@@ -79,6 +79,8 @@ func usage() {
   minilang run <file.ml|-> [flags]  执行脚本（- 从 stdin 读）
   minilang <file.ml> [flags]       同上
   minilang check <file.ml> [flags] 只做词法/语法/编译检查，不执行
+  minilang fmt <file.ml|-> [flags]   按规范格式打印源码到 stdout，不改原文件
+                                     （注释会丢失：词法阶段已丢弃，见 README）
   minilang repl [flags]            交互式解释器
   minilang bench [flags]           fib(30) 基准测试
 

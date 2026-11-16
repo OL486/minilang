@@ -246,3 +246,15 @@ big
 ```bash
 minilang run examples/03-closures.ml --dump-tokens --dump-ast --dump-bytecode --trace
 ```
+
+---
+
+## 附：`fmt`——规范格式打印
+
+`minilang fmt <file.ml|->` 只做词法 + 语法，把源码按规范格式打印到 stdout，
+不改原文件、不执行。风格与 `examples/*.ml` 一致：两格缩进、每个语句一行、
+`fn f(a, b) {` / `if (c) {` / `} else {`。格式化是幂等的
+（`fmt(fmt(x)) == fmt(x)`），格式化前后的程序在双引擎下输出相同。
+
+两个诚实限制，根子在 AST 里没有这些信息：**注释会丢失**（词法阶段已丢弃），
+空行不保留；数字按值重打，`1.0` 会写成 `1`；用户写的括号原样保留。

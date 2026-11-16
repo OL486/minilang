@@ -2,6 +2,7 @@
 //
 //	minilang run <file.ml|->     执行文件；- 表示从 stdin 读源码
 //	minilang check <file.ml>      只做词法/语法/编译检查，不执行
+//	minilang fmt <file.ml|->      按规范格式打印源码到 stdout，不改原文件
 //	minilang repl                 交互式解释器
 //	minilang bench                跑 fib(30) 基准测试
 //
@@ -41,7 +42,7 @@ func main() {
 		}
 		if !strings.HasPrefix(args[0], "-") {
 			switch args[0] {
-			case "repl", "bench", "run", "check":
+			case "repl", "bench", "run", "check", "fmt":
 				cmd = args[0]
 				args = args[1:]
 			}
@@ -69,6 +70,12 @@ func main() {
 			os.Exit(2)
 		}
 		os.Exit(checkFile(positional[0], o))
+	case "fmt":
+		if len(positional) < 1 {
+			usage()
+			os.Exit(2)
+		}
+		os.Exit(fmtFile(positional[0], o))
 	default:
 		if len(positional) < 1 {
 			usage()
