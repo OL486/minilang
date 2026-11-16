@@ -10,7 +10,10 @@
 //
 // 用法（必须在仓库根目录）：
 //
-//	go run tools/pack/main.go
+//	go run tools/pack/main.go [-out <目录>]
+//
+// -out 指定产物目录，默认 dist。CI 干跑（make pack-check）用它把产物
+// 写进临时目录，校验完即删，不污染仓库里的 dist/。
 //
 // 产物：
 //
@@ -25,6 +28,7 @@ import (
 	"compress/gzip"
 	"crypto/sha256"
 	"encoding/hex"
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -76,13 +80,16 @@ func run() error {
 		return fmt.Errorf("请在仓库根目录运行（当前目录找不到 go.mod）")
 	}
 
+	outDir := flag.String("out", "dist", "产物输出目录")
+	flag.Parse()
+
 	version, err := readVersion()
 	if err != nil {
 		return err
 	}
 	fmt.Printf("打包 minilang %s，目标 %d 个平台\n\n", version, len(targets))
 
-	distDir := "dist"
+	distDir := *outDir
 	buildDir := filepath.Join(distDir, ".build")
 	if err := os.MkdirAll(buildDir, 0o755); err != nil {
 		return err
@@ -92,7 +99,7 @@ func run() error {
 
 	var sums []string
 	for _, t := range targets {
-		archive, err := buildOne(t, version, buildDir)
+		archive, err := buildOne(t, version, buildDir, distDir)
 		if err != nil {
 			return err
 		}
@@ -119,7 +126,7 @@ func run() error {
 }
 
 // buildOne 编译一个平台并打成压缩包，返回压缩包路径。
-func buildOne(t target, version, buildDir string) (string, error) {
+func buildOne(t target, version, buildDir, distDir string) (string, error) {
 	name := fmt.Sprintf("minilang_%s_%s_%s", version, t.os, t.arch)
 	binName := "minilang"
 	if t.os == "windows" {
@@ -168,10 +175,10 @@ func buildOne(t target, version, buildDir string) (string, error) {
 	prefix := name + "/"
 	var archivePath string
 	if t.os == "windows" {
-		archivePath = filepath.Join("dist", name+".zip")
+		archivePath = filepath.Join(distDir, name+".zip")
 		err = writeZip(archivePath, prefix, files)
 	} else {
-		archivePath = filepath.Join("dist", name+".tar.gz")
+		archivePath = filepath.Join(distDir, name+".tar.gz")
 		err = writeTarGz(archivePath, prefix, files)
 	}
 	if err != nil {
