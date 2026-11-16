@@ -15,13 +15,13 @@ func (c *Compiler) stmt(s ast.Stmt) {
 			// 顶层 let 编译成全局变量，而不是脚本函数的局部变量。
 			// 这样 REPL 里连续输入的两行才能互相看见 —— 每行是独立编译的脚本函数，
 			// 局部槽位在脚本结束后就没了。
-			idx := c.identifierConstant(n.Name, n.P.Line)
-			c.emit(vm.OpDefineGlobal, n.P.Line)
-			c.emitByte(byte(idx), n.P.Line)
+			idx := c.identifierConstant(n.Name, n.P)
+			c.emit(vm.OpDefineGlobal, n.P)
+			c.emitByte(byte(idx), n.P)
 		} else {
 			// 局部变量：初始化表达式的值已经在栈顶，那个位置就是它的槽位。
 			// 不需要额外的「存」指令 —— 这是栈式 VM 最省事的一点。
-			c.declareLocal(n.Name, n.P.Line)
+			c.declareLocal(n.Name, n.P)
 		}
 
 	case *ast.FnDecl:
@@ -29,18 +29,18 @@ func (c *Compiler) stmt(s ast.Stmt) {
 
 	case *ast.PrintStmt:
 		c.expr(n.Value)
-		c.emit(vm.OpPrint, n.P.Line)
+		c.emit(vm.OpPrint, n.P)
 
 	case *ast.ExprStmt:
 		c.expr(n.X)
-		c.emit(vm.OpPop, n.P.Line)
+		c.emit(vm.OpPop, n.P)
 
 	case *ast.BlockStmt:
 		c.beginScope()
 		for _, st := range n.Stmts {
 			c.stmt(st)
 		}
-		c.endScope(n.P.Line)
+		c.endScope(n.P)
 
 	case *ast.IfStmt:
 		c.ifStmt(n)
@@ -50,63 +50,63 @@ func (c *Compiler) stmt(s ast.Stmt) {
 
 	case *ast.ReturnStmt:
 		if n.Value == nil {
-			c.emit(vm.OpNil, n.P.Line)
+			c.emit(vm.OpNil, n.P)
 		} else {
 			c.expr(n.Value)
 		}
-		c.emit(vm.OpReturn, n.P.Line)
+		c.emit(vm.OpReturn, n.P)
 
 	default:
-		c.errorAt(s.Pos().Line, "内部错误：未知语句类型 %T", s)
+		c.errorAt(s.Pos(), "内部错误：未知语句类型 %T", s)
 	}
 }
 
 func (c *Compiler) ifStmt(n *ast.IfStmt) {
-	line := n.P.Line
+	pos := n.P
 	c.expr(n.Cond)
-	thenJump := c.emitJump(vm.OpJumpIfFalse, line)
+	thenJump := c.emitJump(vm.OpJumpIfFalse, pos)
 
 	// 条件值还在栈上，then 分支进来第一件事就是把它弹掉。
 	// OP_JUMP_IF_FALSE 故意不弹栈：它既要「保留条件值给 then 用」，
 	// 又要「跳到 else 时让 else 去弹」—— 两边各弹一次，指令数最少。
-	c.emit(vm.OpPop, line)
+	c.emit(vm.OpPop, pos)
 	c.beginScope()
 	for _, st := range n.Then {
 		c.stmt(st)
 	}
-	c.endScope(line)
+	c.endScope(pos)
 
-	elseJump := c.emitJump(vm.OpJump, line)
+	elseJump := c.emitJump(vm.OpJump, pos)
 	c.patchJump(thenJump)
 
-	c.emit(vm.OpPop, line)
+	c.emit(vm.OpPop, pos)
 	if len(n.Else) > 0 {
 		c.beginScope()
 		for _, st := range n.Else {
 			c.stmt(st)
 		}
-		c.endScope(line)
+		c.endScope(pos)
 	}
 	c.patchJump(elseJump)
 }
 
 func (c *Compiler) whileStmt(n *ast.WhileStmt) {
-	line := n.P.Line
+	pos := n.P
 	loopStart := len(c.chunk().Code)
 
 	c.expr(n.Cond)
-	exitJump := c.emitJump(vm.OpJumpIfFalse, line)
-	c.emit(vm.OpPop, line)
+	exitJump := c.emitJump(vm.OpJumpIfFalse, pos)
+	c.emit(vm.OpPop, pos)
 
 	c.beginScope()
 	for _, st := range n.Body {
 		c.stmt(st)
 	}
-	c.endScope(line)
+	c.endScope(pos)
 
-	c.emitLoop(loopStart, line)
+	c.emitLoop(loopStart, pos)
 	c.patchJump(exitJump)
-	c.emit(vm.OpPop, line) // 条件为假时把条件值弹掉
+	c.emit(vm.OpPop, pos) // 条件为假时把条件值弹掉
 }
 
 func (c *Compiler) fnDecl(n *ast.FnDecl) {
@@ -114,31 +114,31 @@ func (c *Compiler) fnDecl(n *ast.FnDecl) {
 	if isLocal {
 		// 先声明槽位再编译函数体，这样函数体里的递归调用
 		// `fib(n-1)` 能解析到自己的槽位。反过来写就会报「未定义变量 fib」。
-		c.declareLocal(n.Name, n.P.Line)
+		c.declareLocal(n.Name, n.P)
 	}
 
 	fn, upvals := c.compileFunction(n)
 
 	// 常量必须在 PopRoot 之前加进去：compileFunction 已经把 fn 挂到根上，
 	// 此刻把 fn 放进当前函数的常量池，之后就由常量池（间接由当前函数）保活。
-	idx := c.addConstant(vm.ObjValue(fn), n.P.Line)
+	idx := c.addConstant(vm.ObjValue(fn), n.P)
 	c.alloc.PopRoot()
 
-	c.emit(vm.OpClosure, n.P.Line)
-	c.emitByte(byte(idx), n.P.Line)
+	c.emit(vm.OpClosure, n.P)
+	c.emitByte(byte(idx), n.P)
 	for _, uv := range upvals {
 		if uv.isLocal {
-			c.emitByte(1, n.P.Line)
+			c.emitByte(1, n.P)
 		} else {
-			c.emitByte(0, n.P.Line)
+			c.emitByte(0, n.P)
 		}
-		c.emitByte(uv.index, n.P.Line)
+		c.emitByte(uv.index, n.P)
 	}
 
 	if !isLocal {
-		nameIdx := c.identifierConstant(n.Name, n.P.Line)
-		c.emit(vm.OpDefineGlobal, n.P.Line)
-		c.emitByte(byte(nameIdx), n.P.Line)
+		nameIdx := c.identifierConstant(n.Name, n.P)
+		c.emit(vm.OpDefineGlobal, n.P)
+		c.emitByte(byte(nameIdx), n.P)
 	}
 	// 局部函数不需要额外指令：OP_CLOSURE 已经把闭包压在预留的槽位上。
 }
@@ -160,12 +160,12 @@ func (c *Compiler) compileFunction(n *ast.FnDecl) (*vm.ObjFunction, []upvalueDes
 	}
 	c.fn = inner
 	for _, p := range n.Params {
-		c.declareLocal(p, n.P.Line)
+		c.declareLocal(p, n.P)
 	}
 	for _, st := range n.Body {
 		c.stmt(st)
 	}
-	c.emitReturn(n.P.Line)
+	c.emitReturn(n.P)
 
 	fn.UpvalueCount = len(inner.upvalues)
 	c.fn = outer

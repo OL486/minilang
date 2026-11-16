@@ -2,6 +2,8 @@ package vm
 
 import (
 	"fmt"
+
+	"github.com/OL486/minilang/internal/ast"
 )
 
 // Op 是字节码操作码。
@@ -96,22 +98,25 @@ func (o Op) String() string {
 
 // Chunk 是一段字节码及其附属数据。
 //
-// Lines 与 Code 等长，逐字节记录源码行号。
-// 为什么不用「行号表 + 区间」的压缩格式：调试器要的是 O(1) 查任意偏移的行号，
-// 一个字节的冗余换一次数组下标，对教学项目是划算的。
+// Positions 与 Code 等长，逐字节记录源码位置（行、列）。
+// 为什么不用「行号表 + 区间」的压缩格式：调试器要的是 O(1) 查任意偏移的位置，
+// 一个位置的冗余换一次数组下标，对教学项目是划算的。
+// 代价：每个 ast.Pos 是两个 int，64 位机器上每字节代码要多花 16 字节存位置
+// （以前只记行号时是 8 字节）。这是为了让 VM 运行时错误也能报列号而付的钱，
+// 也是 README 扩展练习第 5 条的做法。
 type Chunk struct {
 	Code      []byte
 	Constants []Value
-	Lines     []int
+	Positions []ast.Pos
 }
 
 func NewChunk() *Chunk {
 	return &Chunk{}
 }
 
-func (c *Chunk) Write(b byte, line int) {
+func (c *Chunk) Write(b byte, pos ast.Pos) {
 	c.Code = append(c.Code, b)
-	c.Lines = append(c.Lines, line)
+	c.Positions = append(c.Positions, pos)
 }
 
 // AddConstant 返回新常量在池中的下标。超过 255 时返回 -1，
@@ -124,9 +129,9 @@ func (c *Chunk) AddConstant(v Value) int {
 	return len(c.Constants) - 1
 }
 
-func (c *Chunk) LineAt(offset int) int {
-	if offset < 0 || offset >= len(c.Lines) {
-		return 0
+func (c *Chunk) PosAt(offset int) ast.Pos {
+	if offset < 0 || offset >= len(c.Positions) {
+		return ast.Pos{}
 	}
-	return c.Lines[offset]
+	return c.Positions[offset]
 }

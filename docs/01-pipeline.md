@@ -87,41 +87,41 @@ If
 
 ```
 == p.ml ==
-0000    1 OP_CLOSURE              0 'add' upvalues=0
-0002    | OP_DEFINE_GLOBAL        1 'add'
-0004    2 OP_CONSTANT             2 '1'
-0006    | OP_CONSTANT             3 '2'
-0008    | OP_CONSTANT             4 '3'
-0010    | OP_MULTIPLY
-0011    | OP_ADD
-0012    | OP_DEFINE_GLOBAL        5 'x'
-0014    3 OP_GET_GLOBAL           6 'x'
-0016    | OP_CONSTANT             7 '5'
-0018    | OP_GREATER
-0019    | OP_JUMP_IF_FALSE       13 -> 0035
-0022    | OP_POP
-0023    | OP_GET_GLOBAL           8 'add'
-0025    | OP_GET_GLOBAL           9 'x'
-0027    | OP_CONSTANT            10 '1'
-0029    | OP_CALL                 2
-0031    | OP_PRINT
-0032    | OP_JUMP                 4 -> 0039
-0035    | OP_POP
-0036    | OP_CONSTANT            11 'small'
-0038    | OP_PRINT
-0039    | OP_NIL
-0040    | OP_RETURN
+0000    1:1   OP_CLOSURE              0 'add' upvalues=0
+0002    |     OP_DEFINE_GLOBAL        1 'add'
+0004    2:9   OP_CONSTANT             2 '1'
+0006    |     OP_CONSTANT             3 '2'
+0008    |     OP_CONSTANT             4 '3'
+0010    |     OP_MULTIPLY
+0011    |     OP_ADD
+0012    |     OP_DEFINE_GLOBAL        5 'x'
+0014    3:5   OP_GET_GLOBAL           6 'x'
+0016    |     OP_CONSTANT             7 '5'
+0018    |     OP_GREATER
+0019    |     OP_JUMP_IF_FALSE       13 -> 0035
+0022    |     OP_POP
+0023    |     OP_GET_GLOBAL           8 'add'
+0025    |     OP_GET_GLOBAL           9 'x'
+0027    |     OP_CONSTANT            10 '1'
+0029    |     OP_CALL                 2
+0031    |     OP_PRINT
+0032    |     OP_JUMP                 4 -> 0039
+0035    |     OP_POP
+0036    |     OP_CONSTANT            11 'small'
+0038    |     OP_PRINT
+0039    |     OP_NIL
+0040    |     OP_RETURN
 
   == add ==
-  0000    1 OP_GET_LOCAL            1
-  0002    | OP_GET_LOCAL            2
-  0004    | OP_ADD
-  0005    | OP_RETURN
-  0006    | OP_NIL
-  0007    | OP_RETURN
+  0000    1:23  OP_GET_LOCAL            1
+  0002    |     OP_GET_LOCAL            2
+  0004    |     OP_ADD
+  0005    |     OP_RETURN
+  0006    |     OP_NIL
+  0007    |     OP_RETURN
 ```
 
-四列的含义：**字节偏移**、**源码行号**（同一行不重复打印，用 `|` 占位）、
+四列的含义：**字节偏移**、**源码位置**（`行:列`；同一行不重复打印，用 `|` 占位）、
 **opcode**、**操作数**。常量类指令的操作数后面带 `'值'`，是常量池里那一项的内容。
 
 ### 逐段读
@@ -176,8 +176,8 @@ func (c *Compiler) patchJump(offset int) {
 对比 `makeCounter` 的例子（`examples/03-closures.ml`）：
 
 ```
-0002    3 OP_CLOSURE              1 'inc' upvalues=1
-0004    |                        local[1]
+0002   10:3   OP_CLOSURE              1 'inc' upvalues=1
+0004    |                            local[1]
 ```
 
 `local[1]` 表示「捕获当前帧的第 1 号栈槽」（槽位 0 是函数自身，所以 1 就是 `count`）。

@@ -96,7 +96,12 @@ func runREPLIO(o options, in io.Reader, out io.Writer, histPath string) {
 	if o.errOut == nil {
 		o.errOut = os.Stderr
 	}
-	o.out = out
+	// 程序输出走 session 的 o.out，REPL 自身的 banner/提示符才走 out：
+	// 只有 o.out 未设置时才用 out 兜底。无条件覆盖会把 main_test.go
+	// 里注入 progOut 的用例输出打到 out 去（#40 与 #49 合并时引入）。
+	if o.out == nil {
+		o.out = out
+	}
 
 	s := newSession(o)
 	hist := loadHistory(histPath)
