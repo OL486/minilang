@@ -122,7 +122,7 @@ func (c *Compiler) fnDecl(n *ast.FnDecl) {
 	// 常量必须在 PopRoot 之前加进去：compileFunction 已经把 fn 挂到根上，
 	// 此刻把 fn 放进当前函数的常量池，之后就由常量池（间接由当前函数）保活。
 	idx := c.addConstant(vm.ObjValue(fn), n.P.Line)
-	c.vm.PopRoot()
+	c.alloc.PopRoot()
 
 	c.emit(vm.OpClosure, n.P.Line)
 	c.emitByte(byte(idx), n.P.Line)
@@ -148,8 +148,8 @@ func (c *Compiler) fnDecl(n *ast.FnDecl) {
 // 约定：本函数把 fn 压入临时根栈，由调用方负责 PopRoot。
 // 这样「编译完 → 放进常量池」之间不会被 GC 打断。
 func (c *Compiler) compileFunction(n *ast.FnDecl) (*vm.ObjFunction, []upvalueDesc) {
-	fn := c.vm.NewFunction(n.Name, len(n.Params))
-	c.vm.PushRoot(vm.ObjValue(fn))
+	fn := c.alloc.NewFunction(n.Name, len(n.Params))
+	c.alloc.PushRoot(vm.ObjValue(fn))
 
 	outer := c.fn
 	inner := &fnState{

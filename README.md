@@ -230,6 +230,7 @@ done
 - [`docs/01-pipeline.md`](docs/01-pipeline.md) —— 三个 dump 怎么读，附真实输出
 - [`docs/02-pitfalls.md`](docs/02-pitfalls.md) —— 五个陷阱的完整分析 + 实现中真实踩到的两个坑
 - [`docs/03-benchmark.md`](docs/03-benchmark.md) —— 基线、对比表、GC 验收、结论
+- [`docs/04-compiler-vm-decoupling.md`](docs/04-compiler-vm-decoupling.md) —— 编译器与 VM 解耦设计：`CompileProgram` 只需 `Allocator` 窄接口，不再依赖活的 `*vm.VM`
 
 ## 环境
 

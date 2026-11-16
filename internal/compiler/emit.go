@@ -36,7 +36,7 @@ func (c *Compiler) addConstant(v vm.Value, line int) int {
 }
 
 func (c *Compiler) identifierConstant(name string, line int) int {
-	s := c.vm.InternString(name)
+	s := c.alloc.InternString(name)
 	return c.addConstant(vm.ObjValue(s), line)
 }
 
