@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/OL486/minilang/internal/vm"
 	"github.com/OL486/minilang/internal/semantics"
 	"github.com/OL486/minilang/internal/treewalk"
+	"github.com/OL486/minilang/internal/vm"
 )
 
 // ---------- 基准测试 ----------

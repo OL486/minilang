@@ -15,10 +15,10 @@ import (
 	"github.com/OL486/minilang/internal/ast"
 	"github.com/OL486/minilang/internal/compiler"
 	"github.com/OL486/minilang/internal/diag"
-	"github.com/OL486/minilang/internal/vm"
 	"github.com/OL486/minilang/internal/lexer"
 	"github.com/OL486/minilang/internal/parser"
 	"github.com/OL486/minilang/internal/treewalk"
+	"github.com/OL486/minilang/internal/vm"
 )
 
 // parseSource 是两个引擎共用的搭建：词法 → 语法。

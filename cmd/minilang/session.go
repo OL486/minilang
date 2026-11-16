@@ -10,11 +10,11 @@ import (
 	"github.com/OL486/minilang/internal/ast"
 	"github.com/OL486/minilang/internal/compiler"
 	"github.com/OL486/minilang/internal/diag"
-	"github.com/OL486/minilang/internal/vm"
 	"github.com/OL486/minilang/internal/lexer"
 	"github.com/OL486/minilang/internal/parser"
 	"github.com/OL486/minilang/internal/token"
 	"github.com/OL486/minilang/internal/treewalk"
+	"github.com/OL486/minilang/internal/vm"
 )
 
 // session 持有跨行存活的状态：REPL 里 VM 和解释器必须复用，

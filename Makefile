@@ -49,6 +49,7 @@ fmt:
 
 ## fmt-check: 检查格式（CI 用，不修改文件）
 fmt-check:
+	@command -v gofmt >/dev/null 2>&1 || { echo "fmt-check: gofmt 不在 PATH 中，无法检查格式"; exit 1; }
 	@out=$$(gofmt -l ./cmd ./internal ./test ./tools 2>/dev/null); \
 	if [ -n "$$out" ]; then echo "以下文件未格式化:"; echo "$$out"; exit 1; fi; \
 	echo "gofmt: clean"
