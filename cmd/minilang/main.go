@@ -1,6 +1,7 @@
 // Command minilang 是 minilang 语言的命令行入口。
 //
 //	minilang run <file.ml>        执行文件
+//	minilang check <file.ml>      只做词法/语法/编译检查，不执行
 //	minilang repl                 交互式解释器
 //	minilang bench                跑 fib(30) 基准测试
 //
@@ -29,7 +30,7 @@ func main() {
 	cmd := "run"
 	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
 		switch args[0] {
-		case "repl", "bench", "run":
+		case "repl", "bench", "run", "check":
 			cmd = args[0]
 			args = args[1:]
 		case "help", "--help", "-h":
@@ -56,6 +57,12 @@ func main() {
 		runREPL(o)
 	case "bench":
 		runBench(o)
+	case "check":
+		if len(positional) < 1 {
+			usage()
+			os.Exit(2)
+		}
+		os.Exit(checkFile(positional[0], o))
 	default:
 		if len(positional) < 1 {
 			usage()
