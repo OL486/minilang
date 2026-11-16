@@ -105,6 +105,9 @@ go run tools/pack/main.go
 minilang run examples/01-basics.ml
 minilang examples/01-basics.ml              # run 可以省略
 
+# 只检查不执行（词法 + 语法 + 编译，恒走 VM 编译，与 --engine 无关）
+minilang check examples/01-basics.ml
+
 # 交互式
 minilang repl
 
