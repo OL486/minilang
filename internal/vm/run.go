@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/OL486/minilang/internal/diag"
+	"github.com/OL486/minilang/internal/semantics"
 )
 
 // ---------- 执行 ----------
@@ -51,6 +52,7 @@ func (vm *VM) Run() (result Value, err error) {
 	}()
 
 	var f *callFrame
+	vm.steps = 0
 	for {
 		// 每次迭代重新取当前帧：OP_CALL / OP_RETURN 会改变 frameCount，
 		// 缓存的指针就失效了。这一行的开销换掉了整整一类「帧错乱」bug。
@@ -63,6 +65,15 @@ func (vm *VM) Run() (result Value, err error) {
 		vm.curLine = line
 		if vm.trace {
 			vm.traceInstruction(pc, op)
+		}
+
+		// 执行步数预算：死循环唯一的逃生口。
+		// 计数器在每次迭代只做一次自增与比较，开销可忽略；
+		// 超限报运行时错误（而不是静默截断），与调用帧、操作数栈等上限一致。
+		vm.steps++
+		if vm.steps > semantics.MaxExecSteps {
+			return NilValue(), diag.New(diag.StageRuntime, line, 0,
+				"执行步数超过 %d 步（常见原因：无限循环）", semantics.MaxExecSteps)
 		}
 
 		switch op {

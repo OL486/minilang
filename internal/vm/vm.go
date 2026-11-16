@@ -65,6 +65,10 @@ type VM struct {
 	gcRuns         int
 	objectsCreated int
 	curLine        int
+
+	// steps 是本次运行已执行的指令数；超过 semantics.MaxExecSteps 时
+	// Run() 报运行时错误。每次 Run() 开始时清零。
+	steps int
 }
 
 // NewVM 创建虚拟机并注册内置函数。
@@ -112,6 +116,9 @@ func (vm *VM) Global(name string) (Value, bool) {
 	v, ok := vm.globals[name]
 	return v, ok
 }
+
+// Steps 返回本次运行已执行的指令数。
+func (vm *VM) Steps() int { return vm.steps }
 
 // CollectGarbage 暴露给外部（压力测试、REPL 的 :gc 命令）。
 func (vm *VM) CollectGarbage() { vm.collectGarbage() }
