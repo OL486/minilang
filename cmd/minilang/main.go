@@ -1,6 +1,6 @@
 // Command minilang 是 minilang 语言的命令行入口。
 //
-//	minilang run <file.ml>        执行文件
+//	minilang run <file.ml|->     执行文件；- 表示从 stdin 读源码
 //	minilang repl                 交互式解释器
 //	minilang bench                跑 fib(30) 基准测试
 //

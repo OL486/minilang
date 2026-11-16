@@ -2,7 +2,9 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 )
@@ -10,24 +12,36 @@ import (
 // ---------- REPL ----------
 
 func runREPL(o options) {
-	s := newSession(o)
-	in := bufio.NewScanner(os.Stdin)
-	in.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
+	runREPLIO(o, os.Stdin, os.Stdout)
+}
 
-	fmt.Printf("minilang %s  [engine=%s]  :help 查看命令，:quit 退出\n", version, o.engine)
+// runREPLIO 是 REPL 的实现：in/out 可注入，runREPL 只传 os.Stdin/os.Stdout。
+func runREPLIO(o options, in io.Reader, out io.Writer) {
+	s := newSession(o)
+	sc := bufio.NewScanner(in)
+	sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
+
+	fmt.Fprintf(out, "minilang %s  [engine=%s]  :help 查看命令，:quit 退出\n", version, o.engine)
 	var pending strings.Builder
 
 	for {
 		if pending.Len() == 0 {
-			fmt.Print("> ")
+			fmt.Fprint(out, "> ")
 		} else {
-			fmt.Print("| ")
+			fmt.Fprint(out, "| ")
 		}
-		if !in.Scan() {
-			fmt.Println()
+		if !sc.Scan() {
+			fmt.Fprintln(out)
+			if err := sc.Err(); err != nil {
+				if errors.Is(err, bufio.ErrTooLong) {
+					fmt.Fprintln(out, "  输入行超过 4 MiB 上限，REPL 退出")
+				} else {
+					fmt.Fprintf(out, "  读取输入失败: %v\n", err)
+				}
+			}
 			return
 		}
-		line := in.Text()
+		line := sc.Text()
 
 		if pending.Len() == 0 {
 			cmd := strings.TrimSpace(line)
@@ -35,21 +49,23 @@ func runREPL(o options) {
 			case ":quit", ":q", "exit":
 				return
 			case ":help", ":h":
-				fmt.Print("  :help   帮助\n  :quit   退出\n  :gc     立即执行一次标记-清除\n  :stats  查看对象堆统计\n")
+				fmt.Fprint(out, "  :help   帮助\n  :quit   退出\n  :gc     立即执行一次标记-清除\n  :stats  查看对象堆统计\n")
 				continue
 			case ":gc":
 				if s.vm != nil {
 					before := s.vm.Stats()
 					s.vm.CollectGarbage()
 					after := s.vm.Stats()
-					fmt.Printf("  GC: 对象 %d -> %d, 堆 %d B -> %d B\n", before.Objects, after.Objects, before.Bytes, after.Bytes)
+					fmt.Fprintf(out, "  GC: 对象 %d -> %d, 堆 %d B -> %d B\n", before.Objects, after.Objects, before.Bytes, after.Bytes)
+				} else {
+					fmt.Fprintln(out, "  tree 引擎没有自己的对象堆，:gc 不做任何事")
 				}
 				continue
 			case ":stats":
 				if s.vm != nil {
-					printStats(os.Stdout, s.vm)
+					printStats(out, s.vm)
 				} else {
-					fmt.Println("  tree 引擎没有自己的对象堆")
+					fmt.Fprintln(out, "  tree 引擎没有自己的对象堆")
 				}
 				continue
 			case "":
