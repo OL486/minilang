@@ -5,21 +5,44 @@
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
 规则：**只有已合进 `main` 的改动才能记进 Unreleased / 版本小节**。
-在途的 PR 先记在下面的「在途」小节并写清未合，等合并后再上移。
+在途的 PR 可先记在 Unreleased 下的「在途」小节并写清未合，等合并后再上移
+（Unreleased 当前没有在途条目时，不留空小节）。
 （notes-mcp 曾把未合的 `list_notes` 写进 Unreleased 造成误报，本仓库不要重蹈覆辙。）
 
 ## [Unreleased]
 
-### 在途（尚未合进 main，合并后再记入上面）
+### Added
+
+- `check` 子命令：只做词法 / 语法 / 编译检查，不执行；纯运行时错误放过
+  （PR #55，Closes #37）。
+- `--trace` 逐指令调试器：VM 下打印 pc / opcode / 栈顶，tree 引擎下明确提示
+  仅支持 VM（PR #43，Closes #42）。
+- REPL 持久历史（`~/.minilang_history`，0600，上限 500 行）+ `:load` +
+  `:engine` / `:history`（PR #49，Closes #45）。
+- 上手教程（`docs/05-tutorial.md`）与 `clock` 计时示例
+  `examples/06-clock-timing.ml`；cmd / treewalk 直接测试，覆盖率分别 0% →
+  84.1% / 89.2%（PR #40，Closes #39）。
+- CHANGELOG / CONTRIBUTING / Issue 与 PR 模板（PR #36，Closes #35）。
+
+### Changed
 
 - 文档漂移收敛、treewalk `interp.go` 拆分、`chunk.go` 反汇编拆分
-  （PR #28，Closes #15；`internal/treewalk/format.go` 的 `ast` import 已补）。
+  （PR #28，Closes #15）。
+- P2 打包：删过期行数、死配置、REPL 毛刺，`run -` 读 stdin，`runFile` 10 MiB
+  上限（PR #48，Closes #46）。
+- README 加 CI / Release / Go / License 徽章（PR #44，Closes #41）。
+
+### Fixed
+
 - 执行步数预算：VM 指令计数 + treewalk 步数计数，死循环撞限报运行时错误，
-  不再只能 Ctrl-C 中断；`docs/00-spec.md` §6 限额表加一行（PR #30，Closes #29）。
-- gofmt 漂移修复：4 个文件 import 排序 + `fmt-check` 在 gofmt 不在 PATH 时报错
-  （PR #32，Closes #31）。
+  不再只能 Ctrl-C 中断；上限 `semantics.MaxExecSteps = 100M`
+  （PR #56，Closes #29；原 PR #30 被替代，未合）。
 - 诊断渲染截断长行：2M 字符单行报错从约 4 MB 降到 251 字节
   （PR #34，Closes #33）。
+- gofmt 漂移修复：4 个文件 import 排序 + `fmt-check` 在 gofmt 不在 PATH 时报错
+  （PR #32，Closes #31）。
+- VM 运行时错误带列号：`Chunk.Lines` → `Positions []ast.Pos`，编译错误也带列号；
+  预算报错同样带列号（PR #57，Closes #51；原 PR #52 / #53 被替代，未合）。
 
 ## [0.1.0] - 2026-10-27
 
@@ -79,17 +102,8 @@ tag `v0.1.0` 指向 2026-10-27 的提交，本文件补记至今已合的全部�
 - 差分 fuzz 发现并修复：只有 `!` 的输入曾让解析器无限递归直至 fatal stack overflow，
   `parsePrefix` 加 EOF 守卫（PR #20，Closes #19）。
 
-### 已知限制
+### 已知限制（当前 Unreleased 仍未解决的）
 
-- 执行无步数 / 时间预算：`while (true) {}` 只能 Ctrl-C 中断
-  （在途 PR #30 修复中）。
-- 诊断渲染不截断长行：超长单行报错会输出整行源码
-  （在途 PR #34 修复中）。
-- VM 运行时错误只有行号、没有列号；两个引擎对同一程序报的位置不对称
-  （待做）。
-- REPL 是裸 `bufio.Scanner`：无行编辑、无历史、无 `:load`、无 `:engine`
-  （待做）。
-- 无 `check` / `fmt` 子命令（待做）；无上手教程；除 `print` 外唯一的内置
-  `clock` 没有任何示例用到（待做）。
+- 无 `fmt` 子命令（`check` 已有，见 Unreleased）。
 - 语言特性冻结：不加类、数组、哈希表、lambda、`break` / `continue`
   （见 `docs/00-spec.md`）。
