@@ -225,7 +225,7 @@ done
 2. 匿名函数 `fn (x) { ... }`（编译器要支持表达式位置的闭包）
 3. 数组 `[1, 2, 3]` + 下标（需要新的堆对象 + GC 标记子元素）
 4. 字符串格式化 / `number` 转 `string`（会让 GC 压力测试变得更有意思）
-5. ~~把 `Chunk.Lines` 换成 `[]struct{line, col}`，让 VM 的运行时错误也带列号~~（已实现：`Chunk.Positions`，见 PR #49）
+5. ~~把 `Chunk.Lines` 换成 `[]struct{line, col}`，让 VM 的运行时错误也带列号~~（已实现：`Chunk.Positions`，见 PR #53）
 6. 分代 GC 或增量 GC（对照当前实现，看 STW 时间怎么变化）
 
 ---
