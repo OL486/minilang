@@ -214,3 +214,33 @@ func runFile(path string, o options) int {
 	}
 	return 0
 }
+
+// checkFile 只做词法 + 语法 + 编译检查，不执行任何代码。
+//
+// 只编译一次、恒走 VM 编译，理由：treewalk 直接解释 AST，没有独立的
+// 编译阶段，所以不存在「tree 编译」；而 VM 编译是最严的一层静态检查
+// （同一作用域重复声明、局部变量超 256、常量池超限、实参超 255），
+// 能抓到 treewalk 要到运行时才暴露、甚至不暴露的问题。
+// 因此 --engine 对 check 不适用：无论传 vm 还是 tree，check 都一样。
+func checkFile(path string, o options) int {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		fmt.Fprintf(o.errOut, "无法读取文件 %s: %v\n", path, err)
+		return 1
+	}
+	o.engine = "vm" // check 恒用 VM 编译器（见上）；newSession 据此建 VM
+	s := newSession(o)
+	stmts, ok := s.parseSource(string(data), true)
+	if !ok {
+		return 1
+	}
+	if len(stmts) == 0 {
+		fmt.Fprintf(o.out, "%s: OK\n", path)
+		return 0
+	}
+	if _, ok := s.compile(stmts, filepath.Base(path), string(data)); !ok {
+		return 1
+	}
+	fmt.Fprintf(o.out, "%s: OK\n", path)
+	return 0
+}

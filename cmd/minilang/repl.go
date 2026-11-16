@@ -96,7 +96,13 @@ func runREPLIO(o options, in io.Reader, out io.Writer, histPath string) {
 	if o.errOut == nil {
 		o.errOut = os.Stderr
 	}
-	o.out = out
+	// 只有 o.out 未设置时才用注入的 out：调用方可能已把 o.out 指到别处
+	//（例如测试把程序输出接到 buffer、提示符走 os.Stdout），无条件覆盖
+	// 会让 session 的输出跑掉。生产路径 defaultOptions 已设 out=os.Stdout，
+	// 与注入的 out 是同一处，行为不变。
+	if o.out == nil {
+		o.out = out
+	}
 
 	s := newSession(o)
 	hist := loadHistory(histPath)
