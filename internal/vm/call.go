@@ -1,18 +1,19 @@
 package vm
 
 import (
+	"github.com/OL486/minilang/internal/ast"
 	"github.com/OL486/minilang/internal/diag"
 )
 
 // ---------- 调用 ----------
 
-func (vm *VM) callValue(callee Value, argc int, line int) error {
+func (vm *VM) callValue(callee Value, argc int, pos ast.Pos) error {
 	if cl := callee.AsClosure(); cl != nil {
-		return vm.callClosure(cl, argc, line)
+		return vm.callClosure(cl, argc, pos)
 	}
 	if nat := callee.AsNative(); nat != nil {
 		if argc != nat.Arity {
-			return diag.New(diag.StageRuntime, line, 0,
+			return diag.New(diag.StageRuntime, pos.Line, pos.Col,
 				"内置函数 %s 需要 %d 个参数，传入了 %d 个", nat.Name, nat.Arity, argc)
 		}
 		args := make([]Value, argc)
@@ -21,22 +22,22 @@ func (vm *VM) callValue(callee Value, argc int, line int) error {
 		}
 		res, err := nat.Fn(vm, args)
 		if err != nil {
-			return diag.New(diag.StageRuntime, line, 0, "内置函数 %s 出错: %v", nat.Name, err)
+			return diag.New(diag.StageRuntime, pos.Line, pos.Col, "内置函数 %s 出错: %v", nat.Name, err)
 		}
 		vm.sp -= argc + 1
 		vm.push(res)
 		return nil
 	}
-	return diag.New(diag.StageRuntime, line, 0, "%s 不是函数，不能调用", callee.TypeName())
+	return diag.New(diag.StageRuntime, pos.Line, pos.Col, "%s 不是函数，不能调用", callee.TypeName())
 }
 
-func (vm *VM) callClosure(cl *ObjClosure, argc int, line int) error {
+func (vm *VM) callClosure(cl *ObjClosure, argc int, pos ast.Pos) error {
 	if argc != cl.Fn.Arity {
-		return diag.New(diag.StageRuntime, line, 0,
+		return diag.New(diag.StageRuntime, pos.Line, pos.Col,
 			"函数 %s 需要 %d 个参数，传入了 %d 个", displayName(cl.Fn.Name), cl.Fn.Arity, argc)
 	}
 	if vm.frameCount >= FramesMax {
-		return diag.New(diag.StageRuntime, line, 0, "调用栈溢出：调用帧超过 %d 层", FramesMax)
+		return diag.New(diag.StageRuntime, pos.Line, pos.Col, "调用栈溢出：调用帧超过 %d 层", FramesMax)
 	}
 	vm.frames[vm.frameCount] = callFrame{
 		closure:  cl,

@@ -9,6 +9,8 @@ import (
 	"io"
 	"strings"
 	"testing"
+
+	"github.com/OL486/minilang/internal/ast"
 )
 
 func TestInternStringDedup(t *testing.T) {
@@ -140,7 +142,7 @@ func TestAddStringConcatUnderGC(t *testing.T) {
 		b := vm.InternString("world")
 		vm.push(ObjValue(a))
 		vm.push(ObjValue(b))
-		if err := vm.add(1); err != nil {
+		if err := vm.add(ast.Pos{Line: 1, Col: 1}); err != nil {
 			t.Fatalf("第 %d 次 add 报错: %v", i, err)
 		}
 		got := vm.peek(0).AsString()

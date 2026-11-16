@@ -1,6 +1,7 @@
 package vm
 
 import (
+	"github.com/OL486/minilang/internal/ast"
 	"github.com/OL486/minilang/internal/diag"
 	"github.com/OL486/minilang/internal/semantics"
 	"github.com/OL486/minilang/internal/token"
@@ -8,29 +9,29 @@ import (
 
 // ---------- 算术 ----------
 
-func (vm *VM) arith(op Op, line int) error {
+func (vm *VM) arith(op Op, pos ast.Pos) error {
 	b := vm.pop()
 	a := vm.pop()
 	if !a.IsNumber() || !b.IsNumber() {
-		return diag.New(diag.StageRuntime, line, 0,
+		return diag.New(diag.StageRuntime, pos.Line, pos.Col,
 			"运算符 %s 不支持 %s 与 %s", opSymbol(op), a.TypeName(), b.TypeName())
 	}
 	// -、*、/、% 的数值语义只留一份，在 semantics.Arithmetic。
 	r, ok := semantics.Arithmetic(arithToken(op), a.AsNumber(), b.AsNumber())
 	if !ok {
-		return diag.New(diag.StageRuntime, line, 0, "内部错误：未知操作码 %d", byte(op))
+		return diag.New(diag.StageRuntime, pos.Line, pos.Col, "内部错误：未知操作码 %d", byte(op))
 	}
 	vm.push(NumberValue(r))
 	return nil
 }
 
-func (vm *VM) add(line int) error {
+func (vm *VM) add(pos ast.Pos) error {
 	b := vm.peek(0)
 	a := vm.peek(1)
 	// + 的语义（number 相加 / string 拼接）只留一份，在 semantics.Add。
 	res, ok := semantics.Add(a.toAny(), b.toAny())
 	if !ok {
-		return diag.New(diag.StageRuntime, line, 0,
+		return diag.New(diag.StageRuntime, pos.Line, pos.Col,
 			"运算符 + 不支持 %s 与 %s", a.TypeName(), b.TypeName())
 	}
 	switch v := res.(type) {
@@ -49,17 +50,17 @@ func (vm *VM) add(line int) error {
 		vm.push(ObjValue(s))
 		return nil
 	}
-	return diag.New(diag.StageRuntime, line, 0,
+	return diag.New(diag.StageRuntime, pos.Line, pos.Col,
 		"运算符 + 不支持 %s 与 %s", a.TypeName(), b.TypeName())
 }
 
-func (vm *VM) compareAndPush(op Op, line int) error {
+func (vm *VM) compareAndPush(op Op, pos ast.Pos) error {
 	b := vm.pop()
 	a := vm.pop()
 	// <、<=、>、>= 的语义只留一份，在 semantics.Compare。
 	res, ok := semantics.Compare(compareToken(op), a.toAny(), b.toAny())
 	if !ok {
-		return diag.New(diag.StageRuntime, line, 0,
+		return diag.New(diag.StageRuntime, pos.Line, pos.Col,
 			"运算符 %s 不支持 %s 与 %s", opSymbol(op), a.TypeName(), b.TypeName())
 	}
 	vm.push(BoolValue(res))
