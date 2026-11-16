@@ -36,12 +36,14 @@ install:
 ## test: 跑全部测试
 test:
 	go test ./... -count=1
+	# pack 用 //go:build pack，go test ./... 会跳过它，单独跑一次。
+	go test -tags pack ./tools/pack/ -count=1
 
 ## vet: 静态检查
 vet:
 	go vet ./...
-	# pack 带 //go:build ignore，go vet ./... 会跳过它，单独对文件跑一次。
-	go vet tools/pack/main.go
+	# pack 带 //go:build pack，go vet ./... 会跳过它，单独跑一次（含测试文件）。
+	go vet -tags pack ./tools/pack/
 
 ## fmt: 格式化
 fmt:
