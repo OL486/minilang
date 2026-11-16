@@ -28,11 +28,19 @@ type session struct {
 func newSession(o options) *session {
 	s := &session{opt: o}
 	if o.engine == "tree" {
+		// tree 引擎没有字节码，--trace 无从跟踪：明确提示而不是静默忽略，
+		// 程序仍正常执行。
+		if o.trace {
+			fmt.Fprintln(o.errOut, "--trace 仅支持 VM 引擎：tree 引擎没有字节码，无法逐指令跟踪（程序仍会正常执行）")
+		}
 		s.interp = treewalk.New(o.out)
 	} else {
 		s.vm = vm.NewVM(o.out)
 		if o.gcOff {
 			s.vm.SetGCEnabled(false)
+		}
+		if o.trace {
+			s.vm.SetTrace(true)
 		}
 	}
 	return s

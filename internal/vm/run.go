@@ -8,6 +8,20 @@ import (
 
 // ---------- 执行 ----------
 
+// traceInstruction 在执行一条指令前打印一行跟踪：
+// pc（字节偏移）/ opcode / 执行前栈顶。
+// 格式与 chunk.go 的反汇编保持一致（%04d + 左对齐 20 列 opcode 名），
+// 方便把 trace 输出和 --dump-bytecode 的反汇编逐行对照着读。
+// 栈顶是执行前的值：例如 OP_ADD 这一行看到的是两个操作数里上面的那个，
+// 相加后的结果要到下一行（OP_PRINT 等）的栈顶才能看到。
+func (vm *VM) traceInstruction(pc int, op Op) {
+	top := "<空>"
+	if vm.sp > 0 {
+		top = Format(vm.peek(0))
+	}
+	fmt.Fprintf(vm.out, "%04d %-20s 栈顶: %s\n", pc, op.String(), top)
+}
+
 // RunScript 执行一个已编译好的脚本函数。
 func (vm *VM) RunScript(fn *ObjFunction) (Value, error) {
 	vm.sp = 0
@@ -42,10 +56,14 @@ func (vm *VM) Run() (result Value, err error) {
 		// 缓存的指针就失效了。这一行的开销换掉了整整一类「帧错乱」bug。
 		f = &vm.frames[vm.frameCount-1]
 		chunk := f.closure.Fn.Chunk
-		op := Op(chunk.Code[f.ip])
+		pc := f.ip
+		op := Op(chunk.Code[pc])
 		f.ip++
-		line := chunk.LineAt(f.ip - 1)
+		line := chunk.LineAt(pc)
 		vm.curLine = line
+		if vm.trace {
+			vm.traceInstruction(pc, op)
+		}
 
 		switch op {
 		case OpConstant:

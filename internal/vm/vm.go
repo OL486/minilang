@@ -54,6 +54,11 @@ type VM struct {
 
 	out io.Writer
 
+	// trace 开启时，分派循环在执行每条指令前打印一行
+	// pc / opcode / 栈顶（见 run.go 的 traceInstruction）。
+	// 只影响调试输出，不影响执行语义；默认关闭。
+	trace bool
+
 	bytesAllocated int
 	nextGC         int
 	gcEnabled      bool
@@ -113,3 +118,7 @@ func (vm *VM) CollectGarbage() { vm.collectGarbage() }
 
 // SetGCEnabled 关闭 GC 只用于对比测试（证明 GC 确实在工作）。
 func (vm *VM) SetGCEnabled(on bool) { vm.gcEnabled = on }
+
+// SetTrace 开关逐指令跟踪：开启后 Run() 在执行每条指令前打印一行
+// pc / opcode / 栈顶到 vm.out。CLI 的 --trace 经此接入。
+func (vm *VM) SetTrace(on bool) { vm.trace = on }
