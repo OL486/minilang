@@ -12,7 +12,7 @@ func (in *Interp) eval(e ast.Expr, env *Env) (any, error) {
 	in.steps++
 	if in.steps > semantics.MaxExecSteps {
 		return nil, diag.New(diag.StageRuntime, e.Pos().Line, e.Pos().Col,
-			"执行步数超过 %d 步（常见原因：无限循环）", semantics.MaxExecSteps)
+			"执行步数超过 %d 步（可能是无限循环，也可能是计算量确实超过上限）", semantics.MaxExecSteps)
 	}
 	switch n := e.(type) {
 	case *ast.Literal:
