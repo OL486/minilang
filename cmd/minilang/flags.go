@@ -16,10 +16,13 @@ type options struct {
 	gcOff        bool
 	out          io.Writer
 	errOut       io.Writer
+	// stdin 是 `minilang run -` 的输入来源，默认 os.Stdin；
+	// 设为其他 reader 只为让测试能注入 stdin，不影响正常启动路径。
+	stdin io.Reader
 }
 
 func defaultOptions() options {
-	return options{engine: "vm", out: os.Stdout, errOut: os.Stderr}
+	return options{engine: "vm", out: os.Stdout, errOut: os.Stderr, stdin: os.Stdin}
 }
 
 func addFlags(fs *flag.FlagSet, o *options) {
@@ -71,7 +74,7 @@ func usage() {
 	fmt.Fprintf(os.Stdout, `minilang %s — 一门带字节码 VM 的小语言
 
 用法:
-  minilang run <file.ml> [flags]   执行脚本
+  minilang run <file.ml|-> [flags]  执行脚本（- 从 stdin 读）
   minilang <file.ml> [flags]       同上
   minilang repl [flags]            交互式解释器
   minilang bench [flags]           fib(30) 基准测试

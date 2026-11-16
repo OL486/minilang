@@ -167,14 +167,41 @@ func printStats(w io.Writer, vm *vm.VM) {
 
 // ---------- 文件执行 ----------
 
+// maxSourceBytes 是单个源码的上限：runFile 读文件、run - 读 stdin 都受它约束，
+// 避免一个超大输入被整块读进内存。超限时 readSource 报干净错误，不执行。
+const maxSourceBytes = 10 * 1024 * 1024
+
+// readSource 读一段源码。path 为 "-" 时从 stdin 读（`minilang run -`）。
+// 无论哪条路，超过 maxSourceBytes 都报错，不返回半截内容。
+func readSource(path string, stdin io.Reader) ([]byte, error) {
+	if path == "-" {
+		data, err := io.ReadAll(io.LimitReader(stdin, maxSourceBytes+1))
+		if err != nil {
+			return nil, fmt.Errorf("读取 stdin 失败: %w", err)
+		}
+		if len(data) > maxSourceBytes {
+			return nil, fmt.Errorf("源码超过 %d MiB 上限", maxSourceBytes/(1024*1024))
+		}
+		return data, nil
+	}
+	if st, err := os.Stat(path); err == nil && st.Size() > maxSourceBytes {
+		return nil, fmt.Errorf("源码超过 %d MiB 上限", maxSourceBytes/(1024*1024))
+	}
+	return os.ReadFile(path)
+}
+
 func runFile(path string, o options) int {
-	data, err := os.ReadFile(path)
+	data, err := readSource(path, o.stdin)
 	if err != nil {
 		fmt.Fprintf(o.errOut, "无法读取文件 %s: %v\n", path, err)
 		return 1
 	}
+	name := filepath.Base(path)
+	if path == "-" {
+		name = "<stdin>"
+	}
 	s := newSession(o)
-	if !s.runSource(string(data), filepath.Base(path)) {
+	if !s.runSource(string(data), name) {
 		return 1
 	}
 	return 0
