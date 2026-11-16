@@ -191,7 +191,8 @@ func runREPLIO(o options, in io.Reader, out io.Writer, histPath string) {
 					fmt.Fprintln(out, "  用法: :load <file>")
 					continue
 				}
-				data, err := os.ReadFile(fields[1])
+				// 与 runFile 同一条 10 MiB 上限：超限文件直接拒掉，不进 REPL。
+				data, err := readSource(fields[1], o.stdin)
 				if err != nil {
 					fmt.Fprintf(o.errOut, "无法读取文件 %s: %v\n", fields[1], err)
 					continue
