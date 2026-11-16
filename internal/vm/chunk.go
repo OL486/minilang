@@ -3,6 +3,8 @@ package vm
 import (
 	"fmt"
 	"strings"
+
+	"github.com/OL486/minilang/internal/ast"
 )
 
 // Op 是字节码操作码。
@@ -97,22 +99,25 @@ func (o Op) String() string {
 
 // Chunk 是一段字节码及其附属数据。
 //
-// Lines 与 Code 等长，逐字节记录源码行号。
-// 为什么不用「行号表 + 区间」的压缩格式：调试器要的是 O(1) 查任意偏移的行号，
-// 一个字节的冗余换一次数组下标，对教学项目是划算的。
+// Positions 与 Code 等长，逐字节记录源码位置（行、列）。
+// 为什么不用「行号表 + 区间」的压缩格式：调试器要的是 O(1) 查任意偏移的位置，
+// 一个位置的冗余换一次数组下标，对教学项目是划算的。
+// 代价：每个 ast.Pos 是两个 int，64 位机器上每字节代码要多花 16 字节存位置
+// （以前只记行号时是 8 字节）。这是为了让 VM 运行时错误也能报列号而付的钱，
+// 也是 README 扩展练习第 5 条的做法。
 type Chunk struct {
 	Code      []byte
 	Constants []Value
-	Lines     []int
+	Positions []ast.Pos
 }
 
 func NewChunk() *Chunk {
 	return &Chunk{}
 }
 
-func (c *Chunk) Write(b byte, line int) {
+func (c *Chunk) Write(b byte, pos ast.Pos) {
 	c.Code = append(c.Code, b)
-	c.Lines = append(c.Lines, line)
+	c.Positions = append(c.Positions, pos)
 }
 
 // AddConstant 返回新常量在池中的下标。超过 255 时返回 -1，
@@ -125,11 +130,11 @@ func (c *Chunk) AddConstant(v Value) int {
 	return len(c.Constants) - 1
 }
 
-func (c *Chunk) LineAt(offset int) int {
-	if offset < 0 || offset >= len(c.Lines) {
-		return 0
+func (c *Chunk) PosAt(offset int) ast.Pos {
+	if offset < 0 || offset >= len(c.Positions) {
+		return ast.Pos{}
 	}
-	return c.Lines[offset]
+	return c.Positions[offset]
 }
 
 // ---------- 反汇编 ----------
@@ -164,13 +169,15 @@ func (c *Chunk) dump(b *strings.Builder, name string, depth int) {
 
 func (c *Chunk) disassembleInstruction(b *strings.Builder, offset int, pad string) int {
 	fmt.Fprintf(b, "%s%04d ", pad, offset)
-	line := c.LineAt(offset)
-	// 同一行连续指令不重复打印行号，用 | 占位，
+	pos := c.PosAt(offset)
+	// 同一行连续指令不重复打印位置，用 | 占位，
 	// 纵向扫读时更容易看出「这一行源码编译成了哪几条指令」。
-	if offset > 0 && line == c.LineAt(offset-1) {
-		b.WriteString("   | ")
+	// 位置栏固定 9 字符宽（行右对齐 4 位 + 冒号 + 列左对齐 3 位 + 空格），
+	// 这样 opcode 列始终对齐。
+	if offset > 0 && pos.Line == c.PosAt(offset-1).Line {
+		b.WriteString("   |     ")
 	} else {
-		fmt.Fprintf(b, "%4d ", line)
+		fmt.Fprintf(b, "%4d:%-3d ", pos.Line, pos.Col)
 	}
 
 	op := Op(c.Code[offset])
@@ -214,7 +221,7 @@ func (c *Chunk) constantInstruction(b *strings.Builder, op Op, offset int, pad s
 			if isLocal == 1 {
 				kind = "local"
 			}
-			fmt.Fprintf(b, "%s%04d    | %-20s   %s[%d]\n", pad, next, "", kind, index)
+			fmt.Fprintf(b, "%s%04d    |     %-20s   %s[%d]\n", pad, next, "", kind, index)
 			next += 2
 		}
 		return next

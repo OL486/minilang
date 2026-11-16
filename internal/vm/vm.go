@@ -4,6 +4,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/OL486/minilang/internal/ast"
 	"github.com/OL486/minilang/internal/semantics"
 )
 
@@ -59,7 +60,9 @@ type VM struct {
 	gcEnabled      bool
 	gcRuns         int
 	objectsCreated int
-	curLine        int
+	// curPos 是当前正在执行的指令对应的源码位置。
+	// 栈溢出是 recover 抓到的，发生时手里没有指令位置，只能靠它。
+	curPos ast.Pos
 }
 
 // NewVM 创建虚拟机并注册内置函数。

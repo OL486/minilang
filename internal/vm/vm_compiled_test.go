@@ -108,6 +108,38 @@ print f(2000);
 	}
 }
 
+// TestRuntimeErrorHasColumn 是 P1-5 的验收：VM 运行时错误必须带列号，
+// 与 tree 引擎格式一致（第 X 行, 第 Y 列）。
+//
+// 位置约定（与 tree 侧相同，都是触发指令对应的 AST 节点位置）：
+//   - 未定义变量：变量名 token 的位置；
+//   - 二元运算类型错误：Binary 节点的位置 = 左操作数的位置；
+//   - 调用栈溢出：递归调用点（callee 变量的位置），不是 fn 声明行。
+func TestRuntimeErrorHasColumn(t *testing.T) {
+	cases := []struct {
+		name string
+		src  string
+		want string
+	}{
+		{"未定义变量", "print nope;\n", "运行时错误 (第 1 行, 第 7 列): 未定义的变量 'nope'"},
+		{"二元运算类型错误", "print 1 + \"a\";\n", "运行时错误 (第 1 行, 第 7 列): 运算符 + 不支持 number 与 string"},
+		{"调用栈溢出", "fn f(n) { if (n == 0) { return 0; } return f(n - 1); }\nprint f(2000);\n", "运行时错误 (第 1 行, 第 44 列): 调用栈溢出"},
+		// 编译错误也顺带带上了列号：errorAt 现在传完整 ast.Pos。
+		{"重复声明", "fn f() { let a = 1; let a = 2; }\n", "编译错误 (第 1 行, 第 21 列): 同一作用域内重复声明变量 'a'"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, err := runSource(t, c.src)
+			if err == nil {
+				t.Fatalf("期望报错，但执行成功了")
+			}
+			if !strings.Contains(err.Error(), c.want) {
+				t.Fatalf("错误位置不对:\n  want 包含: %s\n  实际: %s", c.want, err.Error())
+			}
+		})
+	}
+}
+
 func TestCallArityMismatch(t *testing.T) {
 	_, err := runSource(t, `
 fn f(a, b) { return a + b; }

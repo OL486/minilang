@@ -15,10 +15,10 @@ import (
 	"github.com/OL486/minilang/internal/ast"
 	"github.com/OL486/minilang/internal/compiler"
 	"github.com/OL486/minilang/internal/diag"
-	"github.com/OL486/minilang/internal/vm"
 	"github.com/OL486/minilang/internal/lexer"
 	"github.com/OL486/minilang/internal/parser"
 	"github.com/OL486/minilang/internal/treewalk"
+	"github.com/OL486/minilang/internal/vm"
 )
 
 // parseSource 是两个引擎共用的搭建：词法 → 语法。
@@ -306,6 +306,35 @@ func TestRuntimeErrors(t *testing.T) {
 				t.Fatalf("tree 错误信息缺少 %q: %s", c.wantSub, errTree.Error())
 			}
 		})
+	}
+}
+
+// TestRuntimeErrorsHaveColumns 是 P1-5 的 e2e 验收：
+// 同一段程序在两个引擎下报错都必须带「第 X 行, 第 Y 列」。
+// 位置本身可以不同（比如深递归：tree 指 fn 声明，VM 指递归调用点），
+// 但格式必须一致、都有列号。
+func TestRuntimeErrorsHaveColumns(t *testing.T) {
+	cases := []string{
+		"print nope;\n",
+		"print 1 + \"a\";\n",
+		"let x = 1; x();\n",
+		"fn f(a) { return a; } f();\n",
+	}
+	for _, src := range cases {
+		_, errVM := runVM(t, src)
+		if errVM == nil {
+			t.Fatalf("VM 引擎期望报错，但成功了: %q", src)
+		}
+		if !strings.Contains(errVM.Error(), "列") {
+			t.Fatalf("VM 运行时错误没有列号: %s", errVM.Error())
+		}
+		_, errTree := runTree(t, src)
+		if errTree == nil {
+			t.Fatalf("tree 引擎期望报错，但成功了: %q", src)
+		}
+		if !strings.Contains(errTree.Error(), "列") {
+			t.Fatalf("tree 运行时错误没有列号: %s", errTree.Error())
+		}
 	}
 }
 

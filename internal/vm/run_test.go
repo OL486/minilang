@@ -10,6 +10,8 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+
+	"github.com/OL486/minilang/internal/ast"
 )
 
 // newScriptFn 返回一个空的脚本函数，字节码由调用方手拼。
@@ -28,8 +30,8 @@ func constStr(vm *VM, fn *ObjFunction, s string) int {
 }
 
 // emit 写一条无操作数的指令；emitByte 写一个操作数/立即数字节。
-func emit(fn *ObjFunction, op Op)      { fn.Chunk.Write(byte(op), 1) }
-func emitByte(fn *ObjFunction, b byte) { fn.Chunk.Write(b, 1) }
+func emit(fn *ObjFunction, op Op)      { fn.Chunk.Write(byte(op), ast.Pos{Line: 1, Col: 1}) }
+func emitByte(fn *ObjFunction, b byte) { fn.Chunk.Write(b, ast.Pos{Line: 1, Col: 1}) }
 
 // emitJump 写一条 16 位跳转指令，返回两个操作数字节的位置，
 // 调用方填好目标偏移后用 patchJump 回填。

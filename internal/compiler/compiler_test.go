@@ -5,9 +5,9 @@ import (
 	"testing"
 
 	"github.com/OL486/minilang/internal/ast"
-	"github.com/OL486/minilang/internal/vm"
 	"github.com/OL486/minilang/internal/lexer"
 	"github.com/OL486/minilang/internal/parser"
+	"github.com/OL486/minilang/internal/vm"
 )
 
 // fakeAllocator 是 Allocator 的最小实现：只做编译器真正需要的三件事，
@@ -61,8 +61,8 @@ func newTestCompiler() (*Compiler, *fakeAllocator) {
 // jump = 当前位置 - 操作数位置 - 2，少减 2 会让所有 if 分支多执行两条指令。
 func TestPatchJump(t *testing.T) {
 	c, _ := newTestCompiler()
-	offset := c.emitJump(vm.OpJump, 1)
-	c.emit(vm.OpNil, 1) // 1 条填充指令
+	offset := c.emitJump(vm.OpJump, ast.Pos{Line: 1, Col: 1})
+	c.emit(vm.OpNil, ast.Pos{Line: 1, Col: 1}) // 1 条填充指令
 	c.patchJump(offset)
 
 	jump := int(c.chunk().Code[offset])<<8 | int(c.chunk().Code[offset+1])
@@ -81,8 +81,8 @@ func TestPatchJump(t *testing.T) {
 // locals 下标就是栈槽位，槽位 0 是脚本闭包自身，第一个声明的变量在槽位 1。
 func TestResolveLocalAbsoluteSlot(t *testing.T) {
 	c, _ := newTestCompiler()
-	c.declareLocal("x", 1)
-	c.declareLocal("y", 1)
+	c.declareLocal("x", ast.Pos{Line: 1, Col: 1})
+	c.declareLocal("y", ast.Pos{Line: 1, Col: 1})
 
 	if got := c.resolveLocal(c.fn, "x"); got != 1 {
 		t.Fatalf("resolveLocal(x) = %d, want 1", got)
@@ -99,11 +99,11 @@ func TestResolveLocalAbsoluteSlot(t *testing.T) {
 func TestResolveLocalScope(t *testing.T) {
 	c, _ := newTestCompiler()
 	c.beginScope()
-	c.declareLocal("inner", 1)
+	c.declareLocal("inner", ast.Pos{Line: 1, Col: 1})
 	if got := c.resolveLocal(c.fn, "inner"); got < 0 {
 		t.Fatalf("作用域内 resolveLocal(inner) = %d, want >= 0", got)
 	}
-	c.endScope(1)
+	c.endScope(ast.Pos{Line: 1, Col: 1})
 	if got := c.resolveLocal(c.fn, "inner"); got != -1 {
 		t.Fatalf("退出作用域后 resolveLocal(inner) = %d, want -1", got)
 	}

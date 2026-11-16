@@ -118,7 +118,7 @@ minilang bench --engine=tree    # tree-walking（S5 基线）
 ```bash
 minilang run x.ml --dump-tokens      # token 流：类型 / 字面量 / 行号
 minilang run x.ml --dump-ast         # 语法树：缩进树形
-minilang run x.ml --dump-bytecode    # 反汇编：偏移 / 行号 / opcode / 操作数 / 常量池
+minilang run x.ml --dump-bytecode    # 反汇编：偏移 / 行:列 / opcode / 操作数 / 常量池
 ```
 
 这三个开关是排错能力的全部基础，用法见 [`docs/01-pipeline.md`](docs/01-pipeline.md)。
@@ -219,7 +219,7 @@ done
 2. 匿名函数 `fn (x) { ... }`（编译器要支持表达式位置的闭包）
 3. 数组 `[1, 2, 3]` + 下标（需要新的堆对象 + GC 标记子元素）
 4. 字符串格式化 / `number` 转 `string`（会让 GC 压力测试变得更有意思）
-5. 把 `Chunk.Lines` 换成 `[]struct{line, col}`，让 VM 的运行时错误也带列号
+5. ~~把 `Chunk.Lines` 换成 `[]struct{line, col}`，让 VM 的运行时错误也带列号~~（已实现：`Chunk.Positions`，见 PR #49）
 6. 分代 GC 或增量 GC（对照当前实现，看 STW 时间怎么变化）
 
 ---
