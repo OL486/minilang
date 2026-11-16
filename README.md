@@ -130,7 +130,7 @@ minilang run x.ml --stats            # 执行后打印对象堆与 GC 统计
 minilang run x.ml --gc-off           # 关闭 GC（对照组，长跑会吃满内存）
 ```
 
-REPL 命令：`:help` `:quit` `:gc` `:stats`
+REPL 命令：`:help` `:quit` `:gc` `:stats` `:load` `:engine` `:history`；输入历史保存在 `~/.minilang_history`（最近 500 行）
 
 ---
 

@@ -3,56 +3,186 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
 // ---------- REPL ----------
 
-func runREPL(o options) {
-	s := newSession(o)
-	in := bufio.NewScanner(os.Stdin)
-	in.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
+// maxHistoryLines 是持久历史文件的上限：只保留最近的 N 行。
+const maxHistoryLines = 500
 
-	fmt.Printf("minilang %s  [engine=%s]  :help 查看命令，:quit 退出\n", version, o.engine)
+// historyFileName 是持久历史文件的文件名，放在用户主目录下。
+const historyFileName = ".minilang_history"
+
+func runREPL(o options) {
+	runREPLIO(o, os.Stdin, historyPath())
+}
+
+// historyPath 返回持久历史文件的路径；拿不到主目录时返回 ""（表示禁用历史）。
+func historyPath() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, historyFileName)
+}
+
+// history 是 REPL 的输入历史：启动时从文件读入，退出时写回。
+// 注意：这里只有「持久记录」，没有行编辑——方向键召回历史
+// 需要 raw mode 的自研行编辑，那是另一档工作，见 issue。
+type history struct {
+	lines []string
+}
+
+func loadHistory(path string) *history {
+	h := &history{}
+	if path == "" {
+		return h
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		// 文件不存在是正常情况（第一次进 REPL），静默返回空历史。
+		return h
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		if line == "" {
+			continue
+		}
+		h.lines = append(h.lines, line)
+	}
+	h.trim()
+	return h
+}
+
+// add 记录一行输入：空行不记，连续重复不记。
+func (h *history) add(line string) {
+	if strings.TrimSpace(line) == "" {
+		return
+	}
+	if n := len(h.lines); n > 0 && h.lines[n-1] == line {
+		return
+	}
+	h.lines = append(h.lines, line)
+	h.trim()
+}
+
+func (h *history) trim() {
+	if len(h.lines) > maxHistoryLines {
+		h.lines = h.lines[len(h.lines)-maxHistoryLines:]
+	}
+}
+
+// save 把历史写回文件；path 为空或写失败时静默跳过——
+// 历史丢了不值得打断 REPL。
+func (h *history) save(path string) {
+	if path == "" || len(h.lines) == 0 {
+		return
+	}
+	_ = os.WriteFile(path, []byte(strings.Join(h.lines, "\n")+"\n"), 0600)
+}
+
+// runREPLIO 是 runREPL 的可测试版本：输入与历史路径由调用方注入，
+// 生产环境分别传 os.Stdin 与 historyPath()。
+func runREPLIO(o options, in io.Reader, histPath string) {
+	out := o.out
+	if out == nil {
+		out = os.Stdout
+	}
+	if o.errOut == nil {
+		o.errOut = os.Stderr
+	}
+	o.out = out
+
+	s := newSession(o)
+	hist := loadHistory(histPath)
+	defer hist.save(histPath)
+
+	scanner := bufio.NewScanner(in)
+	scanner.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
+
+	fmt.Fprintf(out, "minilang %s  [engine=%s]  :help 查看命令，:quit 退出\n", version, o.engine)
 	var pending strings.Builder
 
 	for {
 		if pending.Len() == 0 {
-			fmt.Print("> ")
+			fmt.Fprint(out, "> ")
 		} else {
-			fmt.Print("| ")
+			fmt.Fprint(out, "| ")
 		}
-		if !in.Scan() {
-			fmt.Println()
+		if !scanner.Scan() {
+			fmt.Fprintln(out)
 			return
 		}
-		line := in.Text()
+		line := scanner.Text()
+		hist.add(line)
 
 		if pending.Len() == 0 {
 			cmd := strings.TrimSpace(line)
-			switch cmd {
-			case ":quit", ":q", "exit":
+			switch {
+			case cmd == ":quit" || cmd == ":q" || cmd == "exit":
 				return
-			case ":help", ":h":
-				fmt.Print("  :help   帮助\n  :quit   退出\n  :gc     立即执行一次标记-清除\n  :stats  查看对象堆统计\n")
+			case cmd == ":help" || cmd == ":h":
+				fmt.Fprint(out, "  :help    帮助\n  :quit    退出\n  :gc      立即执行一次标记-清除\n  :stats   查看对象堆统计\n  :load <file>  执行文件内容\n  :engine [tree|vm]  查看/切换执行引擎（切换后新建会话）\n  :history  查看输入历史\n")
 				continue
-			case ":gc":
+			case cmd == ":gc":
 				if s.vm != nil {
 					before := s.vm.Stats()
 					s.vm.CollectGarbage()
 					after := s.vm.Stats()
-					fmt.Printf("  GC: 对象 %d -> %d, 堆 %d B -> %d B\n", before.Objects, after.Objects, before.Bytes, after.Bytes)
+					fmt.Fprintf(out, "  GC: 对象 %d -> %d, 堆 %d B -> %d B\n", before.Objects, after.Objects, before.Bytes, after.Bytes)
 				}
 				continue
-			case ":stats":
+			case cmd == ":stats":
 				if s.vm != nil {
-					printStats(os.Stdout, s.vm)
+					printStats(out, s.vm)
 				} else {
-					fmt.Println("  tree 引擎没有自己的对象堆")
+					fmt.Fprintln(out, "  tree 引擎没有自己的对象堆")
 				}
 				continue
-			case "":
+			case cmd == ":history":
+				for i, l := range hist.lines {
+					fmt.Fprintf(out, "  %4d  %s\n", i+1, l)
+				}
+				continue
+			case cmd == ":engine":
+				fmt.Fprintf(out, "  当前引擎: %s\n", s.opt.engine)
+				continue
+			case cmd == ":load":
+				fmt.Fprintln(out, "  用法: :load <file>")
+				continue
+			case strings.HasPrefix(cmd, ":engine ") || strings.HasPrefix(cmd, ":engine\t"):
+				fields := strings.Fields(cmd)
+				if len(fields) != 2 {
+					fmt.Fprintln(out, "  用法: :engine tree|vm")
+					continue
+				}
+				switch fields[1] {
+				case "vm", "tree":
+					o.engine = fields[1]
+					s = newSession(o)
+					fmt.Fprintf(out, "  已切换到 %s 引擎（新会话，之前定义的变量已清空）\n", fields[1])
+				default:
+					fmt.Fprintf(out, "  未知引擎 %q，可选 vm | tree\n", fields[1])
+				}
+				continue
+			case strings.HasPrefix(cmd, ":load ") || strings.HasPrefix(cmd, ":load\t"):
+				fields := strings.Fields(cmd)
+				if len(fields) != 2 {
+					fmt.Fprintln(out, "  用法: :load <file>")
+					continue
+				}
+				data, err := os.ReadFile(fields[1])
+				if err != nil {
+					fmt.Fprintf(o.errOut, "无法读取文件 %s: %v\n", fields[1], err)
+					continue
+				}
+				// 复用 runSource：语法/运行时错误走同一套诊断格式，不退出 REPL。
+				s.runSource(string(data), filepath.Base(fields[1]))
+				continue
+			case cmd == "":
 				continue
 			}
 		}

@@ -87,5 +87,7 @@ func usage() {
 REPL 命令:
   :help  显示帮助    :quit  退出
   :gc    立即回收    :stats 查看堆统计
+  :load <file>  执行文件    :engine [tree|vm]  切换引擎
+  :history  查看输入历史（保存在 ~/.minilang_history，最近 500 行）
 `, version)
 }
