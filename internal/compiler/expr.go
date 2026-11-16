@@ -124,7 +124,7 @@ func (c *Compiler) literal(n *ast.Literal) {
 	case string:
 		// 字符串常量也走驻留表：同一内容复用同一对象，省内存。
 		// == 本身按内容比较（见 vm.valuesEqual），不依赖指针相等。
-		s := c.vm.InternString(v)
+		s := c.alloc.InternString(v)
 		idx := c.addConstant(vm.ObjValue(s), n.P.Line)
 		c.emit(vm.OpConstant, n.P.Line)
 		c.emitByte(byte(idx), n.P.Line)

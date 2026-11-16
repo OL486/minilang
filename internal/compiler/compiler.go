@@ -48,9 +48,9 @@ type fnState struct {
 
 // Compiler 是字节码编译器。
 type Compiler struct {
-	vm   *vm.VM
-	fn   *fnState
-	errs []*diag.Error
+	alloc Allocator
+	fn    *fnState
+	errs  []*diag.Error
 }
 
 // compileAbort 用于从深层递归直接退出编译。
@@ -59,8 +59,11 @@ type Compiler struct {
 type compileAbort struct{}
 
 // CompileProgram 编译整个程序，返回脚本函数。
-func CompileProgram(v *vm.VM, stmts []ast.Stmt) (fn *vm.ObjFunction, errs []*diag.Error) {
-	c := &Compiler{vm: v}
+//
+// 只需要一个 Allocator（堆的最小接口，见 alloc.go），不需要一个活的 *vm.VM：
+// *vm.VM 完整实现 Allocator，生产调用方照常传 vm；单元测试可以传 fakeAllocator。
+func CompileProgram(a Allocator, stmts []ast.Stmt) (fn *vm.ObjFunction, errs []*diag.Error) {
+	c := &Compiler{alloc: a}
 	defer func() {
 		if r := recover(); r != nil {
 			if _, ok := r.(compileAbort); !ok {
@@ -68,13 +71,13 @@ func CompileProgram(v *vm.VM, stmts []ast.Stmt) (fn *vm.ObjFunction, errs []*dia
 			}
 			fn = nil
 			errs = c.errs
-			v.ClearRoots()
+			a.ClearRoots()
 		}
 	}()
 
-	script := v.NewFunction("", 0)
+	script := a.NewFunction("", 0)
 	// 立刻上根：编译过程中会创建大量字符串常量，随时可能触发 GC。
-	v.PushRoot(vm.ObjValue(script))
+	a.PushRoot(vm.ObjValue(script))
 	// 槽位 0 固定给脚本闭包自身。运行期 slotBase 指向它，
 	// 所以脚本的局部变量从槽位 1 开始 —— 与函数完全一致，不需要特例。
 	c.fn = &fnState{fn: script, locals: []local{{name: "", depth: 0}}}
@@ -82,10 +85,10 @@ func CompileProgram(v *vm.VM, stmts []ast.Stmt) (fn *vm.ObjFunction, errs []*dia
 		c.stmt(s)
 	}
 	c.emitReturn(lastLine(stmts))
-	v.PopRoot()
+	a.PopRoot()
 
 	if len(c.errs) > 0 {
-		v.ClearRoots()
+		a.ClearRoots()
 		return nil, c.errs
 	}
 	return script, nil
