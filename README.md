@@ -148,7 +148,7 @@ REPL 命令：`:help` `:quit` `:gc` `:stats`
 | S7 | VM 执行循环 + 跳转 + 局部变量 | `internal/vm/run.go` | while 循环结果与 S3 一致 |
 | S8 | VM 里的函数 / 帧 / upvalue | `internal/vm/call.go` `internal/vm/upvalue.go` `object.go` | `makeCounter` 在 VM 上一致 |
 | S9 | 标记-清除 GC | `internal/vm/gc.go` | `examples/05-gc-stress.ml --stats` |
-| S10 | 收尾对比 | [`docs/03-benchmark.md`](docs/03-benchmark.md) | 约 8× 加速 |
+| S10 | 收尾对比 | [`docs/03-benchmark.md`](docs/03-benchmark.md) | 约 6.6× 加速 |
 
 ---
 
@@ -180,8 +180,8 @@ done
 
 | 指标 | tree-walking | 字节码 VM |
 |---|---|---|
-| `fib(30)` 中位数 | 1402 ms | **161 ms** |
-| 加速比 | — | **8.7×**（多次测量 7.8–8.7，随机器负载波动） |
+| `fib(30)` 中位数 | 2471 ms | **377 ms** |
+| 加速比 | — | **6.6×**（两轮会话 6.5–6.7×；2026-11-16，Linux x86_64 / Go 1.23.4 共享虚拟机，5 次 + 预热取中位数） |
 | 40 万对象压力测试后存活 | — | **288**（关闭 GC 时 403,015） |
 
 完整数据和测量口径见 [`docs/03-benchmark.md`](docs/03-benchmark.md)。

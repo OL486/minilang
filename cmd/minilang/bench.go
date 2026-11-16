@@ -39,8 +39,8 @@ func runBench(o options) {
 	fmt.Printf("minilang 基准测试  engine=%s  fib(30)\n", o.engine)
 
 	// 5 次取中位数，跑之前先预热 1 次（让 GC、JIT 预热与首次分配的抖动
-	// 不进测量区间）。README/docs 里的 benchmark 数字是旧口径（3 次、无预热）
-	// 测出来的，本轮只改测量口径、不改数字，待 CI 重测后再同步更新。
+	// 不进测量区间）。README/docs 里的数字已按本口径同步（2026-11-16，
+	// Linux x86_64 / Go 1.23.4 共享虚拟机：tree 2471 ms、VM 377 ms，6.6×）。
 	const benchRuns = 5
 	var times []time.Duration
 	var result string
