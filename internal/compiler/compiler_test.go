@@ -221,6 +221,203 @@ func TestCompileProgramFakeAllocatorInternsStrings(t *testing.T) {
 	}
 }
 
+// compileSource 把一段源码词法 → 语法 → 编译成脚本函数，
+// 任何一步报错都直接失败 —— 这些测试只关心「编译成功后的字节码形状」。
+func compileSource(t *testing.T, src string) *vm.ObjFunction {
+	t.Helper()
+	tokens, lexErrs := lexer.New(src).Scan()
+	if len(lexErrs) > 0 {
+		t.Fatalf("词法错误: %v", lexErrs[0])
+	}
+	stmts, parseErrs := parser.New(tokens).Parse()
+	if len(parseErrs) > 0 {
+		t.Fatalf("语法错误: %v", parseErrs[0])
+	}
+	alloc := newFakeAllocator()
+	fn, compErrs := CompileProgram(alloc, stmts)
+	if len(compErrs) > 0 {
+		t.Fatalf("编译错误: %v", compErrs[0])
+	}
+	if fn == nil {
+		t.Fatal("CompileProgram 返回了 nil 函数")
+	}
+	return fn
+}
+
+// jumpInsn 是一条跳转指令及其解出的目标偏移。
+type jumpInsn struct {
+	op     vm.Op
+	offset int
+	target int
+}
+
+// scanJumps 沿字节码逐条解码，返回所有跳转指令（OP_JUMP / OP_JUMP_IF_FALSE /
+// OP_LOOP）及其目标偏移。前向跳转目标 = 指令位置 + 3 + 偏移；
+// OP_LOOP 是后向跳转，目标 = 指令位置 + 3 - 偏移。
+// 长度表与 vm/disasm.go 的解码规则一致（本测试的程序不含闭包，
+// OP_CLOSURE 的变长分支只是为了解码完整）。
+func scanJumps(t *testing.T, fn *vm.ObjFunction) []jumpInsn {
+	t.Helper()
+	code := fn.Chunk.Code
+	var jumps []jumpInsn
+	for pc := 0; pc < len(code); {
+		op := vm.Op(code[pc])
+		switch op {
+		case vm.OpJump, vm.OpJumpIfFalse, vm.OpLoop:
+			jump := int(code[pc+1])<<8 | int(code[pc+2])
+			target := pc + 3 + jump
+			if op == vm.OpLoop {
+				target = pc + 3 - jump
+			}
+			jumps = append(jumps, jumpInsn{op: op, offset: pc, target: target})
+			pc += 3
+		case vm.OpConstant, vm.OpGetLocal, vm.OpSetLocal, vm.OpGetGlobal,
+			vm.OpSetGlobal, vm.OpDefineGlobal, vm.OpGetUpvalue, vm.OpSetUpvalue,
+			vm.OpCall:
+			pc += 2
+		case vm.OpClosure:
+			idx := int(code[pc+1])
+			closure, ok := fn.Chunk.Constants[idx].AsObject().(*vm.ObjFunction)
+			if !ok {
+				t.Fatalf("OP_CLOSURE 常量 %d 不是函数", idx)
+			}
+			pc += 2 + 2*closure.UpvalueCount
+		default:
+			pc++
+		}
+	}
+	return jumps
+}
+
+func jumpsOf(jumps []jumpInsn, op vm.Op) []jumpInsn {
+	var out []jumpInsn
+	for _, j := range jumps {
+		if j.op == op {
+			out = append(out, j)
+		}
+	}
+	return out
+}
+
+// TestCompileProgramIfElse 编译 if-else 程序，断言：
+//   - 反汇编含 OP_JUMP_IF_FALSE（条件跳转）和 OP_JUMP（跳过 else）；
+//   - OP_JUMP_IF_FALSE 的目标正好是 else 入口的 OP_POP（条件为假时弹掉条件值）；
+//   - OP_JUMP 的目标正好是 else 之后的第一条指令（emitReturn 发的 OP_NIL）。
+//
+// 这三点合起来才算 ifStmt 的回填正确：只含操作码名不检查目标的话，
+// patchJump 的 off-by-one（少减 2）根本发现不了。
+func TestCompileProgramIfElse(t *testing.T) {
+	src := `let a = true;
+if (a) { print 1; } else { print 2; }
+`
+	fn := compileSource(t, src)
+	out := fn.Chunk.Disassemble("test")
+	if !strings.Contains(out, "OP_JUMP_IF_FALSE") {
+		t.Fatalf("if 应编译出 OP_JUMP_IF_FALSE:\n%s", out)
+	}
+	// "OP_JUMP " 带尾空格：OP_JUMP_IF_FALSE 里是下划线，不会误数。
+	if strings.Count(out, "OP_JUMP ") != 1 {
+		t.Fatalf("if-else 应恰好编译出 1 条 OP_JUMP（跳过 else）:\n%s", out)
+	}
+
+	jumps := scanJumps(t, fn)
+	jifs := jumpsOf(jumps, vm.OpJumpIfFalse)
+	if len(jifs) != 1 {
+		t.Fatalf("应恰好有 1 条 OP_JUMP_IF_FALSE，实际 %d 条", len(jifs))
+	}
+	if got := fn.Chunk.Code[jifs[0].target]; got != byte(vm.OpPop) {
+		t.Fatalf("OP_JUMP_IF_FALSE 应跳到 else 入口的 OP_POP（偏移 %d），实际偏移 %d 处是 %s",
+			jifs[0].target, jifs[0].target, vm.Op(got))
+	}
+	plain := jumpsOf(jumps, vm.OpJump)
+	if len(plain) != 1 {
+		t.Fatalf("应恰好有 1 条 OP_JUMP，实际 %d 条", len(plain))
+	}
+	if got := fn.Chunk.Code[plain[0].target]; got != byte(vm.OpNil) {
+		t.Fatalf("OP_JUMP 应跳到 else 之后的第一条指令 OP_NIL（偏移 %d），实际偏移 %d 处是 %s",
+			plain[0].target, plain[0].target, vm.Op(got))
+	}
+}
+
+// TestCompileProgramWhile 编译 while 程序，断言：
+//   - 反汇编含 OP_LOOP；
+//   - OP_LOOP 的目标正好回到循环开头（条件的第一条指令 OP_GET_GLOBAL），
+//     即 emitLoop 的后向偏移算对了；
+//   - 退出用的 OP_JUMP_IF_FALSE 目标正好是循环后的 OP_POP（条件为假时弹掉条件值）。
+func TestCompileProgramWhile(t *testing.T) {
+	src := `let i = 0;
+while (i < 3) { i = i + 1; }
+`
+	fn := compileSource(t, src)
+	out := fn.Chunk.Disassemble("test")
+	if !strings.Contains(out, "OP_LOOP") {
+		t.Fatalf("while 应编译出 OP_LOOP:\n%s", out)
+	}
+
+	jumps := scanJumps(t, fn)
+	loops := jumpsOf(jumps, vm.OpLoop)
+	if len(loops) != 1 {
+		t.Fatalf("应恰好有 1 条 OP_LOOP，实际 %d 条", len(loops))
+	}
+	// 循环开头是条件的第一条指令：let 之后第一条是 OP_GET_GLOBAL i。
+	if got := fn.Chunk.Code[loops[0].target]; got != byte(vm.OpGetGlobal) {
+		t.Fatalf("OP_LOOP 应跳回循环开头 OP_GET_GLOBAL（偏移 %d），实际偏移 %d 处是 %s",
+			loops[0].target, loops[0].target, vm.Op(got))
+	}
+	jifs := jumpsOf(jumps, vm.OpJumpIfFalse)
+	if len(jifs) != 1 {
+		t.Fatalf("应恰好有 1 条 OP_JUMP_IF_FALSE（退出跳转），实际 %d 条", len(jifs))
+	}
+	if got := fn.Chunk.Code[jifs[0].target]; got != byte(vm.OpPop) {
+		t.Fatalf("退出跳转应跳到循环后的 OP_POP（偏移 %d），实际偏移 %d 处是 %s",
+			jifs[0].target, jifs[0].target, vm.Op(got))
+	}
+}
+
+// TestCompileProgramLogical 编译 `a && b || c`，断言短路跳转的存在与目标：
+//   - 恰好 2 条 OP_JUMP_IF_FALSE（&& 一条、|| 一条）和 1 条 OP_JUMP（|| 的）；
+//   - && 的 OP_JUMP_IF_FALSE 目标正好是 || 的 OP_JUMP_IF_FALSE
+//     （左边为假时直接跳出 &&，落到 || 的判断）；
+//   - || 的 OP_JUMP_IF_FALSE 目标是 OP_POP（左边为假时弹掉，算右边）；
+//   - || 的 OP_JUMP 目标是 OP_PRINT（左边为真时把左值原样留下，跳过右边）。
+func TestCompileProgramLogical(t *testing.T) {
+	src := `let a = true;
+let b = false;
+let c = true;
+print a && b || c;
+`
+	fn := compileSource(t, src)
+	out := fn.Chunk.Disassemble("test")
+	if strings.Count(out, "OP_JUMP_IF_FALSE") != 2 {
+		t.Fatalf("a && b || c 应恰好编译出 2 条 OP_JUMP_IF_FALSE:\n%s", out)
+	}
+	if strings.Count(out, "OP_JUMP ") != 1 {
+		t.Fatalf("a && b || c 应恰好编译出 1 条 OP_JUMP:\n%s", out)
+	}
+
+	jumps := scanJumps(t, fn)
+	jifs := jumpsOf(jumps, vm.OpJumpIfFalse)
+	if len(jifs) != 2 {
+		t.Fatalf("应恰好有 2 条 OP_JUMP_IF_FALSE，实际 %d 条", len(jifs))
+	}
+	if jifs[0].target != jifs[1].offset {
+		t.Fatalf("&& 的 OP_JUMP_IF_FALSE（偏移 %d）应跳到 || 的 OP_JUMP_IF_FALSE（偏移 %d），实际跳到偏移 %d",
+			jifs[0].offset, jifs[1].offset, jifs[0].target)
+	}
+	if got := fn.Chunk.Code[jifs[1].target]; got != byte(vm.OpPop) {
+		t.Fatalf("|| 的 OP_JUMP_IF_FALSE 应跳到 OP_POP（偏移 %d），实际偏移 %d 处是 %s",
+			jifs[1].target, jifs[1].target, vm.Op(got))
+	}
+	plain := jumpsOf(jumps, vm.OpJump)
+	if len(plain) != 1 {
+		t.Fatalf("应恰好有 1 条 OP_JUMP，实际 %d 条", len(plain))
+	}
+	if got := fn.Chunk.Code[plain[0].target]; got != byte(vm.OpPrint) {
+		t.Fatalf("|| 的 OP_JUMP 应跳到 OP_PRINT（偏移 %d），实际偏移 %d 处是 %s",
+			plain[0].target, plain[0].target, vm.Op(got))
+	}
+}
+
 // TestCompileProgramErrorClearsRoots：编译报错时返回 nil 函数与错误，
 // 且临时根栈被清空（defer 里的 ClearRoots）—— 证明错误路径也不依赖真实 VM。
 func TestCompileProgramErrorClearsRoots(t *testing.T) {
