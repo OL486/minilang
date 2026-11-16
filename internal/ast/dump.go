@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/OL486/minilang/internal/semantics"
 	"github.com/OL486/minilang/internal/token"
 )
 
@@ -27,6 +28,13 @@ func indent(b *strings.Builder, depth int) {
 }
 
 func dumpStmt(b *strings.Builder, s Stmt, depth int) {
+	// parser 保证解析出的 AST 深度 ≤ MaxNestingDepth；这里是对手写 AST 的防御，
+	// 否则一个万层嵌套的手写节点会让 Dump 的递归耗尽栈。
+	if depth > semantics.MaxNestingDepth {
+		indent(b, depth)
+		b.WriteString("…嵌套太深，已截断\n")
+		return
+	}
 	indent(b, depth)
 	switch n := s.(type) {
 	case *LetStmt:
@@ -90,6 +98,11 @@ func dumpStmt(b *strings.Builder, s Stmt, depth int) {
 }
 
 func dumpExpr(b *strings.Builder, e Expr, depth int) {
+	if depth > semantics.MaxNestingDepth {
+		indent(b, depth)
+		b.WriteString("…嵌套太深，已截断\n")
+		return
+	}
 	indent(b, depth)
 	switch n := e.(type) {
 	case *Literal:

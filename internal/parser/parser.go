@@ -10,6 +10,7 @@ package parser
 import (
 	"github.com/OL486/minilang/internal/ast"
 	"github.com/OL486/minilang/internal/diag"
+	"github.com/OL486/minilang/internal/semantics"
 	"github.com/OL486/minilang/internal/token"
 )
 
@@ -55,6 +56,10 @@ type Parser struct {
 	tokens []token.Token
 	cur    int
 	errs   []*diag.Error
+	// depth 是当前语法嵌套深度，enterDepth 维护。
+	// 只在真正递归的入口计数（expression、blockBody、ifStatement、
+	// parsePrefix 的一元分支），每层嵌套恰好计 1。
+	depth int
 }
 
 // New 创建解析器。tokens 必须以 EOF 结尾（lexer 保证）。
@@ -130,6 +135,19 @@ func (p *Parser) consume(t token.Type, what string) token.Token {
 }
 
 // ---------- 错误 ----------
+
+// enterDepth 记一层语法嵌套，超限报语法错误。
+// 计数点只放在真正递归的入口：expression（括号、调用实参、赋值右端）、
+// parsePrefix 的一元分支（一元链）、blockBody（代码块）、ifStatement（else-if 链）。
+// 二元运算的右操作数递归受优先级层数限制（最多 8 层），不需要计数。
+// 调用方必须先注册 defer 扣减、再调 enterDepth：enterDepth 超限时会 panic，
+// defer 若在它之后注册就赶不上 unwind，depth 会永久虚高一位。
+func (p *Parser) enterDepth() {
+	p.depth++
+	if p.depth > semantics.MaxNestingDepth {
+		p.failAt(p.peek(), "嵌套太深：已超过 %d 层，请拆分表达式或代码块", semantics.MaxNestingDepth)
+	}
+}
 
 func (p *Parser) failHere(format string, args ...any) {
 	p.failAt(p.peek(), format, args...)
@@ -239,6 +257,8 @@ func (p *Parser) block(_ token.Token) ast.Stmt {
 
 // blockBody 读到匹配的右花括号为止。左花括号已被消费。
 func (p *Parser) blockBody() []ast.Stmt {
+	defer func() { p.depth-- }()
+	p.enterDepth()
 	var stmts []ast.Stmt
 	for !p.check(token.RBrace) && !p.atEnd() {
 		s := p.safeStatement()
@@ -251,6 +271,8 @@ func (p *Parser) blockBody() []ast.Stmt {
 }
 
 func (p *Parser) ifStatement(kw token.Token) ast.Stmt {
+	defer func() { p.depth-- }()
+	p.enterDepth()
 	p.consume(token.LParen, "if 条件必须用括号包裹，形如 if (x < 1)")
 	cond := p.expression()
 	p.consume(token.RParen, "if 条件的右括号")
@@ -306,6 +328,8 @@ func (p *Parser) exprStatement() ast.Stmt {
 
 // expression 处理赋值（最低优先级、右结合），其余交给 Pratt。
 func (p *Parser) expression() ast.Expr {
+	defer func() { p.depth-- }()
+	p.enterDepth()
 	e := p.parsePrecedence(precOr)
 	if p.check(token.Assign) {
 		eq := p.advance()
@@ -366,6 +390,8 @@ func (p *Parser) parsePrefix() ast.Expr {
 		p.consume(token.RParen, "括号的右括号")
 		return &ast.Grouping{P: pos(t), Inner: inner}
 	case token.Bang, token.Minus:
+		defer func() { p.depth-- }()
+		p.enterDepth()
 		right := p.parsePrecedence(precUnary)
 		return &ast.Unary{P: pos(t), Op: t.Type, Right: right}
 	}

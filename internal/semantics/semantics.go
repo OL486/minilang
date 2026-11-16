@@ -57,6 +57,14 @@ func HumanBytes(n uint64) string {
 // 两个引擎行为不一致；统一为 1000 后，双引擎一致性承诺在边界处也成立。
 const MaxCallDepth = 1000
 
+// MaxNestingDepth 是语法嵌套深度的上限（括号、调用、代码块、else-if 链共用）。
+// 与 MaxCallDepth 取同一个值 1000：手写代码极少超过几十层嵌套，
+// 而没有上限时，200 万层括号会让 parser 的递归耗尽 goroutine 栈，
+// 进程以 fatal error: stack overflow 死亡，没有干净的语言错误。
+// 解析保证 AST 深度 ≤1000 后，compiler 与 treewalk 的递归深度也随之有界，
+// 不必再各加限制；ast.Dump 用同一上限截断手写 AST 的打印。
+const MaxNestingDepth = 1000
+
 // SignedBytes 处理「运行后比运行前更小」的情况。
 // 直接用 uint64 相减会下溢成 1.7e19，这个数会以「17592186044415 MiB」的形式
 // 出现在报告里 —— 一眼就能看出是算错了，但很容易被当成 GC 把内存还回去了。
